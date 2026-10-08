@@ -129,12 +129,19 @@
 
         /* ESTADO */
         .loading { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; z-index: 300; display: none; }
+        .splash { position: fixed; inset: 0; z-index: 400; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; transition: opacity 0.35s; }
+        .splash.fuera { opacity: 0; pointer-events: none; }
+        .splash img { width: min(240px, 60vw); height: auto; }
+        .splash-barra { width: 140px; height: 5px; border-radius: 5px; background: #eef1f3; overflow: hidden; }
+        .splash-barra span { display: block; width: 40%; height: 100%; border-radius: 5px; background: var(--primary); animation: splashBarra 1.1s ease-in-out infinite; }
+        @keyframes splashBarra { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+        .splash-txt { color: var(--text-light); font-size: 0.9rem; font-weight: 600; text-align: center; padding: 0 16px; }
         .bloqueo { position: fixed; inset: 0; background: rgba(255,255,255,0.5); z-index: 250; display: none; }
         .toast { position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 12px 20px; border-radius: 14px; font-weight: 700; z-index: 300; opacity: 0; transition: 0.3s; pointer-events: none; white-space: nowrap; }
         .toast.show { opacity: 1; }
 
         @media print {
-            .header, .footer, .loading, .toast, .bloqueo { display: none !important; }
+            .header, .footer, .loading, .toast, .bloqueo, .splash { display: none !important; }
             body { background: white; }
             main { padding: 0; }
             .card, .sem-card, .stats div, .barras, .hist { box-shadow: none; border: 1px solid #ddd; }
@@ -519,19 +526,6 @@
         .emo-ops button { border: 1px solid #e3e6e8; background: #fff; border-radius: 8px; font-size: 1.2rem; width: 36px; height: 36px; cursor: pointer; padding: 0; }
         .estado-chip { display: inline-block; background: var(--b); color: var(--t); border-radius: 8px; padding: 3px 8px; font-weight: 800; font-size: 0.78rem; white-space: nowrap; }
         .t-sub { display: block; font-size: 0.76rem; color: var(--text-light); margin-top: 2px; }
-        /* Merch: casilla de pagado (✓ verde = pagó · puntito gris = no ha pagado) */
-        .pago-chk { width: 26px; height: 26px; border-radius: 8px; border: 2px solid #dfe3e6; background: #fff; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.95rem; color: #fff; flex-shrink: 0; vertical-align: middle; font-family: inherit; }
-        .pago-chk:not(.on)::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #c3c9ce; }
-        .pago-chk.on { background: var(--primary); border-color: var(--primary); }
-        .pago-chk:hover:not(.on) { border-color: var(--primary); }
-        .merch-tipo { margin-bottom: 4px; }
-        .edad-chip { font-size: 0.75rem; color: var(--text-light); font-weight: 600; margin-left: 6px; }
-        /* Actividades: niños inscritos y gastos se reparten el alto; cada uno hace scroll por dentro */
-        .act-gas-lista { max-height: 300px; overflow: auto; }
-        body.desk .act-det { overflow: hidden; }
-        body.desk .act-det .act-ins { flex: 3 1 0; min-height: 200px; }
-        body.desk .act-det .act-gas { flex: 2 1 0; min-height: 150px; display: flex; flex-direction: column; }
-        body.desk .act-gas-lista { max-height: none; flex: 1; min-height: 0; }
     </style>
 </head>
 <body>
@@ -549,6 +543,8 @@
     <aside id="panel" class="panel"></aside>
 
     <div id="footer" class="footer"><div id="footerIn" class="footer-in"></div></div>
+    <!-- Pantalla de carga inicial: tapa la app hasta que llegan los datos de la hoja -->
+    <div id="splash" class="splash"><img id="splashLogo" alt="Step Up English"><div class="splash-barra"><span></span></div><div id="splashTxt" class="splash-txt">Cargando…</div></div>
     <div id="loading" class="loading">⏳ Cargando…</div>
     <div id="bloqueo" class="bloqueo"></div>
     <div id="toast" class="toast"></div>
@@ -590,6 +586,14 @@
         const LOGO_HEAD = 'data:image/png;base64,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';
         const LOGO_RESUMEN = 'data:image/png;base64,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';
         const IMG_LOGO = new Image(); IMG_LOGO.src = LOGO_RESUMEN;
+        document.getElementById('splashLogo').src = LOGO_RESUMEN;
+        let SPLASH_T = [setTimeout(() => { const t = document.getElementById('splashTxt'); if (t) t.textContent = 'Está tardando un poco más de lo normal…'; }, 10000),
+                        setTimeout(() => quitarSplash(), 30000)];
+        function quitarSplash() {
+            const sp = document.getElementById('splash'); if (!sp) return;
+            SPLASH_T.forEach(clearTimeout);
+            sp.classList.add('fuera'); setTimeout(() => sp.remove(), 400);
+        }
 
         // Nombre que aparece en la imagen que se manda a los papás
         const ESCUELA = 'Step Up';
@@ -771,7 +775,6 @@ En el concepto escriba el nombre del alumno, por favor.`;
             DATA.vacaciones = d.vacaciones || [];
             DATA.actividades = d.actividades || null;
             DATA.playeras = d.playeras || null;
-            DATA.ninos = d.ninos || null;
             if (DATA.playeras) { const py = DATA.playeras;   // por si una talla llega como fecha ("10-12" que Sheets convirtió)
                 (py.ventas || []).concat(py.compras || []).forEach(v => v.talla = arreglarTalla(v.talla));
                 py.tallas = [...new Set((py.tallas || []).map(arreglarTalla))]; }
@@ -933,7 +936,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     <button class="limpiar" id="limpiar" onclick="$('buscar').value=''; buscar('')">✕</button>
                 </div>
                 <div id="resultados"></div>
-                ${esAdmin() && !DESK && DATA.actividades ? `<div class="dos" style="margin-bottom:16px"><button class="btn-tienda" style="margin:0" onclick="ir('#/actividades')"><span>🎉</span> Actividades</button><button class="btn-tienda" style="margin:0" onclick="ir('#/playeras')"><span>👕</span> Merch</button></div>` : ''}
+                ${esAdmin() && !DESK && DATA.actividades ? `<div class="dos" style="margin-bottom:16px"><button class="btn-tienda" style="margin:0" onclick="ir('#/actividades')"><span>🎉</span> Actividades</button><button class="btn-tienda" style="margin:0" onclick="ir('#/playeras')"><span>👕</span> Playeras</button></div>` : ''}
                 ${DATA.tienda && !DESK ? `<button class="btn-tienda" onclick="ir('#/vender')"><span>🛍️</span> Tienda${pendTienda().length ? ` <small>· ${pendTienda().length} por enviar</small>` : ''}<span class="chev" style="margin-left:auto">›</span></button>` : ''}
                 <div id="gruposGrid" class="grid">${grupos.map((g, i) => {
                 const n = alumnosDe(g).length, u = ultimaClase(g);
@@ -946,7 +949,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 </div>`;
             }).join('')}${esAdmin() ? `<div class="card card-nuevo" onclick="ir('#/grupo/nuevo')"><div class="emoji">➕</div><div class="nombre">Nuevo grupo</div></div>` : ''}</div>
                 ${esAdmin() && !DESK && (DATA.bajas || []).length ? `<p class="ayuda" style="margin-top:24px"><span class="link-pin" onclick="ir('#/bajas')">Alumnos dados de baja (${DATA.bajas.length})</span></p>` : ''}
-                ${DESK ? '' : `<p class="ayuda" style="margin-top:${esAdmin() && (DATA.bajas || []).length ? '8' : '24'}px">${esAdmin() ? '🔑 Administrador' : '👩‍🏫 Maestra'} · <span class="link-pin" onclick="cambiarPin()">Cambiar PIN</span>${esAdmin() && pantallaAncha() ? ' · <span class="link-pin" onclick="usarModo(\'pc\')">🖥️ Versión computadora</span>' : ''}</p>`}`);
+                ${DESK ? '' : `<p class="ayuda" style="margin-top:${esAdmin() && (DATA.bajas || []).length ? '8' : '24'}px">${esAdmin() ? '🔑 Administrador · <span class="link-pin" onclick="cambiarPin()">Cambiar PIN</span>' : '👩‍🏫 Maestra'}${esAdmin() && pantallaAncha() ? ' · <span class="link-pin" onclick="usarModo(\'pc\')">🖥️ Versión computadora</span>' : ''}</p>`}`);
         }
 
         function cambiarPin() {
@@ -2060,7 +2063,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     ${it('#/maestras', '👩‍🏫', 'Maestras', r === 'maestras')}
                     ${it('#/tienda', '🛍️', 'Tienda', r === 'tienda' || r === 'vender')}
                     ${it('#/actividades', '🎉', 'Actividades', r === 'actividades')}
-                    ${it('#/playeras', '👕', 'Merch', r === 'playeras')}
+                    ${it('#/playeras', '👕', 'Playeras', r === 'playeras')}
                     ${it('#/gastos', '💸', 'Gastos', r === 'gastos')}
                     ${it('#/vacaciones', '🏖️', 'Vacaciones', r === 'vacaciones')}
                     ${it('#/nuevo', '➕', 'Nuevo alumno', r === 'nuevo')}
@@ -2500,18 +2503,18 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const ingC = c => suma(MS, m => ingresosMes(m, c)), brutoC = c => suma(MS, m => brutoMes(m, c));
             const conAdeudo = DATA.alumnos.filter(a => a.pago && a.pago.adeudo > 0).length;
             // Fuentes de ingreso (renglones fijos) y en qué se va (maestras, otros gastos, ganancia)
-            const fijos = ['Mensualidad', 'Inscripción', 'Material', 'Tienda', 'Actividades', 'Merch'];
+            const fijos = ['Mensualidad', 'Inscripción', 'Material', 'Tienda', 'Actividades', 'Playeras'];
             const fuentes = [
                 { txt: 'Mensualidades', v: ingC('Mensualidad'), c: '#2a78d6' },
                 { txt: 'Inscripciones', v: ingC('Inscripción'), c: '#eb6834' },
                 { txt: 'Material <small>(ganancia)</small>', v: ingC('Material'), c: '#1baf7a', sub: `de ${dinero(brutoC('Material'))} cobrados` },
                 { txt: 'Tienda <small>(ganancia)</small>', v: ingC('Tienda'), c: '#eda100', sub: `de ${dinero(brutoC('Tienda'))} vendidos` },
                 { txt: 'Actividades', v: ingC('Actividades'), c: '#e34948' },
-                { txt: 'Merch', v: ingC('Merch'), c: '#95a5a6' },
+                { txt: 'Playeras', v: ingC('Playeras'), c: '#95a5a6' },
                 { txt: 'Otros ingresos', v: Math.max(0, Math.round((ing - fijos.reduce((t, c) => t + ingC(c), 0)) * 100) / 100), c: '#95a5a6' }
             ];
             // En la dona, playeras y otros ingresos van juntos (gris); en Métricas, cada uno en su renglón
-            const fuentesDona = fuentes.slice(0, 5).concat([{ txt: 'Merch y otros', v: fuentes[5].v + fuentes[6].v, c: '#95a5a6' }]);
+            const fuentesDona = fuentes.slice(0, 5).concat([{ txt: 'Playeras y otros', v: fuentes[5].v + fuentes[6].v, c: '#95a5a6' }]);
             const usos = [
                 { txt: 'Maestras', v: maestrasMes, c: '#4a3aa7' },
                 { txt: 'Otros gastos', v: gas - maestrasMes, c: '#e87ba4', sub: gastosPorCat(MS) },
@@ -3342,7 +3345,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
         const actsData = () => DATA.actividades || { actividades: [], inscritos: [] };
         const actividad = id => actsData().actividades.find(a => a.id === id) || null;
         const inscritosDe = id => actsData().inscritos.filter(i => i.act === id).sort((x, y) => comparar(x.nino, y.nino));
-        const gastosAct = id => fin().gastos.filter(g => g.actividad === id).sort((x, y) => x.fecha < y.fecha ? 1 : -1);
+        const gastosAct = id => fin().gastos.filter(g => g.actividad === id);
         function arreglarTalla(t) {
             t = String(t == null ? '' : t).trim();
             if (!/GMT|\d{4}-\d{2}-\d{2}T\d{2}:/.test(t)) return t;
@@ -3362,29 +3365,6 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const pl = playerasAct(id);
             return { ins, n: ins.length, alumnos: ins.filter(i => i.idAlumno).length, total, pagado, porCobrar: Math.max(0, total - pagado), gastos,
                      ganancia: pagado - gastos, playeras: pl.length };
-        }
-
-        // ---- Edad de los niños ----
-        // Edad cumplida hoy a partir de la fecha de nacimiento 'yyyy-mm-dd'
-        function edadDe(c) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c || ''))) return '';
-            const h = hoy();
-            let e = Number(h.slice(0, 4)) - Number(c.slice(0, 4));
-            if (h.slice(5) < c.slice(5)) e--;
-            return e >= 0 ? e : '';
-        }
-        const txtEdad = e => e === '' || e == null ? '' : e + (Number(e) === 1 ? ' año' : ' años');
-        // Todos los niños que se pueden inscribir: alumnos activos e inactivos, y niños que ya vinieron a otra actividad
-        function listaNinos() {
-            if (DATA.ninos) return DATA.ninos;
-            // (si el Apps Script todavía no está actualizado, solo salen los alumnos activos)
-            return DATA.alumnos.map(a => ({ id: a.id, nombre: a.alumno, edad: a.cumple ? edadDe(a.cumple) : (a.edad === '' ? '' : Number(a.edad)),
-                cumple: a.cumple, tutor: a.padre, telefono: a.telefono || '', activo: true, alumno: true }));
-        }
-        function edadInscrito(i) {
-            if (i.cumple) return edadDe(i.cumple);
-            const n = listaNinos().find(x => i.idAlumno ? x.id === i.idAlumno : x.nombre === i.nino);
-            return n ? n.edad : '';
         }
 
         let ACT_SEL = '', ACT_INS = [], ACT_GAS = [];
@@ -3415,8 +3395,6 @@ En el concepto escriba el nombre del alumno, por favor.`;
             ACT_INS = st.ins; ACT_GAS = gastosAct(id);
             const pl = playerasAct(id);
             const playeraDe = i => pl.find(v => v.nombre === i.nino);
-            const edadHtml = i => { const e = edadInscrito(i); return e === '' ? '' : `<span class="edad-chip">${txtEdad(e)}</span>`; };
-            const merchTxt = p => `${ICO_MERCH[tipoDe(p)] || '👕'} ${esc(p.talla)}`;
             return `
                 <div class="res-card">
                     <div class="act-tit">
@@ -3435,27 +3413,27 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     </div>
                 </div>
                 <div class="res-card act-ins">
-                    <div class="res-tit"><b>Niños inscritos</b><span class="sub" style="margin:0">${st.n}</span><div class="grow"></div><button class="btn-mini btn-cola" onclick="formInscrito('${esc(a.id)}')">➕ Inscribir niño</button></div>
+                    <div class="res-tit"><b>Niños inscritos</b><div class="grow"></div><button class="btn-mini btn-cola" onclick="formInscrito('${esc(a.id)}')">➕ Inscribir niño</button></div>
                     ${st.ins.length && !DESK ? `<div class="lista" style="margin-top:0;box-shadow:none">${st.ins.map((i, k) => { const p = playeraDe(i), debe = i.total - i.pagado;
                         return `<div class="fila" style="cursor:default;padding:12px 4px">
-                            <span class="fila-nom">${esc(i.nino)}${edadHtml(i)} ${i.idAlumno ? '' : '<span class="chip chip-nuevo">Nuevo</span>'}<br>
-                                <span class="res-grupo">${debe > 0 ? `<b class="rojo">Debe ${dinero(debe)}</b>` : '✅ Pagado'} · ${dinero(i.pagado)} de ${dinero(i.total)}${p ? ` · ${merchTxt(p)}${p.entregada ? ' ✅' : ' por entregar'}` : ''}</span></span>
+                            <span class="fila-nom">${esc(i.nino)} ${i.idAlumno ? '' : '<span class="chip chip-nuevo">Nuevo</span>'}<br>
+                                <span class="res-grupo">${debe > 0 ? `<b class="rojo">Debe ${dinero(debe)}</b>` : '✅ Pagado'} · ${dinero(i.pagado)} de ${dinero(i.total)}${p ? ` · 👕 ${esc(p.talla)}${p.entregada ? ' ✅' : ' por entregar'}` : ''}</span></span>
                             ${waNumero(i.telefono) && debe > 0 ? `<button class="inv-btn" style="background:#25d366" onclick="recordarAct(${k})">💬</button>` : ''}
                             <button class="inv-btn gris" onclick="formInscrito('${esc(a.id)}', ${k})">✏️</button></div>`; }).join('')}</div>`
                     : st.ins.length ? `<div class="tabla-caja act-tabla"><table class="tabla compacta" style="box-shadow:none">
-                        <thead><tr><th>Niño</th><th>Tutor</th>${a.cobro === 'Por día' ? '<th class="num">Días</th>' : ''}<th class="num">Total</th><th class="num">Pagó</th><th>Merch</th><th></th></tr></thead>
+                        <thead><tr><th>Niño</th><th>Tutor</th>${a.cobro === 'Por día' ? '<th class="num">Días</th>' : ''}<th class="num">Total</th><th class="num">Pagó</th><th>Playera</th><th></th></tr></thead>
                         <tbody>${st.ins.map((i, k) => { const p = playeraDe(i), debe = i.total - i.pagado;
-                            return `<tr style="cursor:default"><td><b>${esc(i.nino)}</b>${edadHtml(i)} ${i.idAlumno ? '<span class="chip">Alumno</span>' : '<span class="chip chip-nuevo">Nuevo</span>'}</td>
+                            return `<tr style="cursor:default"><td><b>${esc(i.nino)}</b> ${i.idAlumno ? '<span class="chip">Alumno</span>' : '<span class="chip chip-nuevo">Nuevo</span>'}</td>
                                 <td>${esc(i.tutor || '—')}${i.telefono ? `<span class="t-sub">${esc(i.telefono.replace(/(\d{2})(\d{4})(\d{4})$/, '$1 $2 $3'))}</span>` : ''}</td>
                                 ${a.cobro === 'Por día' ? `<td class="num">${i.dias || '—'}</td>` : ''}
                                 <td class="num">${dinero(i.total)}</td><td class="num">${debe > 0 ? `<span class="rojo">${dinero(i.pagado)}</span>` : dinero(i.pagado) + ' ✅'}</td>
-                                <td>${p ? `${merchTxt(p)} ${p.pagado >= p.precio ? '' : '<small class="rojo">debe</small>'} ${p.entregada ? '✅' : '<small style="color:#b9770e">por entregar</small>'}` : '—'}</td>
+                                <td>${p ? `${esc(p.talla)} ${p.pagado >= p.precio ? '' : '<small class="rojo">debe</small>'} ${p.entregada ? '✅' : '<small style="color:#b9770e">por entregar</small>'}` : '—'}</td>
                                 <td class="acc">${waNumero(i.telefono) && debe > 0 ? `<button class="b-wa" title="Recordar pago" onclick="recordarAct(${k})">💬</button>` : ''}<button class="b-pago" title="Editar / registrar pago" onclick="formInscrito('${esc(a.id)}', ${k})">✏️</button><button class="b-borrar" title="Quitar" onclick="quitarInscrito(${k})">✕</button></td></tr>`; }).join('')}</tbody></table></div>`
                       : '<div class="vacio" style="padding:30px 10px">Todavía no hay niños inscritos.</div>'}
                 </div>
-                <div class="res-card act-gas">
-                    <div class="res-tit"><b>Gastos de la actividad</b><span class="sub" style="margin:0">${ACT_GAS.length ? `${ACT_GAS.length} · ${dinero(st.gastos)}` : ''}</span><div class="grow"></div><button class="btn-mini" onclick="formGastoAct('${esc(a.id)}')">➕ Gasto</button></div>
-                    ${ACT_GAS.length ? `<div class="act-gas-lista">${ACT_GAS.map((g, k) => `<div class="pago-linea"><span>${fFecha(g.fecha)} · ${esc(g.concepto.replace(a.nombre + ': ', ''))}</span><b>${dinero(g.monto)} <button class="pn-borrar" title="Borrar" onclick="borrarGastoUI(${k}, ACT_GAS)">✕</button></b></div>`).join('')}</div>`
+                <div class="res-card">
+                    <div class="res-tit"><b>Gastos de la actividad</b><div class="grow"></div><button class="btn-mini" onclick="formGastoAct('${esc(a.id)}')">➕ Gasto</button></div>
+                    ${ACT_GAS.length ? ACT_GAS.map((g, k) => `<div class="pago-linea"><span>${fFecha(g.fecha)} · ${esc(g.concepto)}</span><b>${dinero(g.monto)} <button class="pn-borrar" title="Borrar" onclick="borrarGastoUI(${k}, ACT_GAS)">✕</button></b></div>`).join('')
                       : '<p class="ayuda" style="text-align:left;margin:0">Sin gastos registrados (material, renta, pago a quien la imparte…).</p>'}
                 </div>`;
         }
@@ -3487,7 +3465,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const det = [ni ? `${ni} niño${ni === 1 ? '' : 's'} inscrito${ni === 1 ? '' : 's'}` : '', ng ? `${ng} gasto${ng === 1 ? '' : 's'}` : ''].filter(Boolean).join(' y ');
             if (!confirm(`¿Eliminar "${a.nombre}"?${det ? `\n\nTambién se borra${ni + ng === 1 ? '' : 'n'} ${det}.` : ''}\n\nEsto no se puede deshacer.`)) return;
             let borrarPlayeras = false;
-            if (np) borrarPlayeras = confirm(`Hay ${np} pieza${np === 1 ? '' : 's'} de merch vendida${np === 1 ? '' : 's'} en esta actividad.\n\nAceptar = borrarlas también (regresan al inventario)\nCancelar = dejarlas en 👕 Merch`);
+            if (np) borrarPlayeras = confirm(`Hay ${np} playera${np === 1 ? '' : 's'} vendida${np === 1 ? '' : 's'} en esta actividad.\n\nAceptar = borrarlas también (regresan al inventario)\nCancelar = dejarlas en 👕 Playeras`);
             if (!(await enviar({ accion: 'borrarActividad', id, borrarPlayeras }))) return;
             cerrarModal(); toast('🗑️ Actividad eliminada');
             ACT_SEL = ''; if (location.hash === '#/actividades') render(); else ir('#/actividades');
@@ -3504,39 +3482,27 @@ En el concepto escriba el nombre del alumno, por favor.`;
         }
 
         // ---- Inscribir / editar niño ----
-        // "Ya lo conocemos": lista con TODOS los niños (alumnos activos, inactivos y niños de otras actividades) y su edad.
-        // "Niño nuevo": nombre, fecha de nacimiento (calcula la edad), mamá/papá y teléfono.
         let INS = null;
         function formInscrito(actId, k) {
             const a = actividad(actId), i = k != null ? ACT_INS[k] : null;
             const pl = i ? playerasAct(actId).find(v => v.nombre === i.nino) : null;
-            const py = DATA.playeras || { tallas: [] };
-            INS = { act: actId, fila: i ? i.fila : 0, nuevo: false, elegido: null, idAlumno: i ? i.idAlumno : '', pl };
-            const ninos = listaNinos().slice().sort((x, y) => comparar(x.nombre, y.nombre));
-            const etq = n => [txtEdad(n.edad), n.alumno ? (n.activo ? 'Alumno' : 'Alumno inactivo') : 'Vino a otra actividad'].filter(Boolean).join(' · ');
-            const tipoPl = pl ? tipoDe(pl) : 'Playera';
-            const tallas = (pl && !py.tallas.includes(pl.talla) ? [pl.talla] : []).concat(py.tallas);
-            const parcial = pl && pl.pagado > 0 && pl.pagado < pl.precio;
+            const py = DATA.playeras || { tallas: [], precio: 0 };
+            INS = { act: actId, fila: i ? i.fila : 0, alumno: i ? !!i.idAlumno : true, idAlumno: i ? i.idAlumno : '', pl };
+            const alumnos = DATA.alumnos.slice().sort((x, y) => comparar(x.alumno, y.alumno));
             $('modalIn').innerHTML = `
                 <h2>${i ? '✏️ ' + esc(i.nino) : '➕ Inscribir niño'}</h2>
                 <p class="ayuda" style="margin-top:-6px">${esc(a.nombre)}</p>
                 ${i ? '' : `<div class="tabs" style="margin-bottom:12px">
-                    <button class="tab sel" id="tAl" onclick="tipoIns(false)">Ya lo conocemos</button>
-                    <button class="tab" id="tNu" onclick="tipoIns(true)">Niño nuevo</button></div>`}
-                <div id="insBuscaBox" style="${i ? 'display:none' : ''}">
-                    <div class="campo"><label>Niño <small style="font-weight:600">· alumnos activos e inactivos, y niños de otras actividades</small></label>
-                        <input id="insBusca" list="listaNinosIns" placeholder="Escribe para buscar…" autocomplete="off" oninput="elegirNinoIns(this.value)">
-                        <datalist id="listaNinosIns">${ninos.map(n => `<option value="${esc(n.nombre)}">${esc(etq(n))}</option>`).join('')}</datalist></div>
-                    <div id="insInfo"></div>
+                    <button class="tab sel" id="tAl" onclick="tipoIns(true)">Alumno de la escuela</button>
+                    <button class="tab" id="tNu" onclick="tipoIns(false)">Niño nuevo</button></div>`}
+                <div id="insAlumno" style="${INS.alumno && !i ? '' : 'display:none'}">
+                    <div class="campo"><label>Alumno</label><input id="insBusca" list="listaAlumnos" placeholder="Escribe para buscar…" oninput="elegirAlumnoIns(this.value)">
+                        <datalist id="listaAlumnos">${alumnos.map(x => `<option value="${esc(x.alumno)}">${esc(x.grupo)}</option>`).join('')}</datalist></div>
                 </div>
-                <div id="insDatos" style="${i ? '' : 'display:none'}">
-                    <div class="campo"><label>Nombre del niño</label><input id="insNom" type="text" autocapitalize="words" value="${esc(i ? i.nino : '')}"></div>
-                    <div class="dos" id="insCumpleBox" style="${i && i.idAlumno ? 'display:none' : ''}">
-                        <div class="campo"><label>Fecha de nacimiento</label><input id="insCumple" type="date" value="${esc(i && !i.idAlumno ? i.cumple || '' : '')}" onchange="mostrarEdadIns()"></div>
-                        <div class="campo"><label>Edad</label><input id="insEdad" type="text" readonly tabindex="-1" style="background:#f3f5f6"></div>
-                    </div>
+                <div id="insDatos" style="${INS.alumno && !i ? 'display:none' : ''}">
+                    <div class="campo"><label>Nombre del niño</label><input id="insNom" type="text" value="${esc(i ? i.nino : '')}"></div>
                     <div class="dos">
-                        <div class="campo"><label>Mamá / papá</label><input id="insTutor" type="text" autocapitalize="words" value="${esc(i ? i.tutor : '')}"></div>
+                        <div class="campo"><label>Mamá / papá</label><input id="insTutor" type="text" value="${esc(i ? i.tutor : '')}"></div>
                         <div class="campo"><label>Teléfono</label><input id="insTel" inputmode="tel" value="${esc(i ? i.telefono : '')}"></div>
                     </div>
                 </div>
@@ -3545,76 +3511,53 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     <div class="campo"><label>Total a pagar</label><input id="insTotal" inputmode="decimal" value="${i ? i.total : a.precio}" oninput="${i ? '' : "$('insPag').value = this.value"}"></div>
                     <div class="campo"><label>Pagó</label><input id="insPag" inputmode="decimal" value="${i ? i.pagado : a.precio}"></div>
                 </div>
-                ${pl ? `<div class="campo" style="margin-bottom:4px"><label>👕 Merch</label></div><input type="checkbox" id="insPl" checked hidden>`
-                  : `<label class="check"><input type="checkbox" id="insPl" onchange="$('insPlDatos').style.display = this.checked ? '' : 'none'"> <span>Compró merch (playera o sudadera)</span></label>`}
-                <div id="insPlDatos" style="${pl ? '' : 'display:none'}">
-                    <div class="dos">
-                        <div class="campo"><label>Tipo</label><select id="insPlTipo" onchange="$('insPlPrecio').value = precioMerch(this.value) || ''">${TIPOS_MERCH.map(t => `<option ${t === tipoPl ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-                        <div class="campo"><label>Talla</label><select id="insPlTalla">${tallas.map(t => `<option ${pl && pl.talla === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+                ${pl ? `<div class="campo" style="margin-bottom:4px"><label>👕 Playera</label></div><input type="checkbox" id="insPl" checked hidden>`
+                  : `<label class="check"><input type="checkbox" id="insPl" onchange="$('insPlDatos').style.display = this.checked ? '' : 'none'"> <span>Compró playera</span></label>`}
+                    <div id="insPlDatos" style="${pl ? '' : 'display:none'}">
+                        <div class="dos">
+                            <div class="campo"><label>Talla</label><select id="insPlTalla">${(pl && !py.tallas.includes(pl.talla) ? [pl.talla] : []).concat(py.tallas).map(t => `<option ${pl && pl.talla === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+                            <div class="campo"><label>Precio playera</label><input id="insPlPrecio" inputmode="decimal" value="${pl ? pl.precio : (py.precio || '')}"></div>
+                        </div>
+                        <label class="check"><input type="checkbox" id="insPlPag" ${!pl || pl.pagado >= pl.precio ? 'checked' : ''}> <span>Ya la pagó${pl && pl.pagado > 0 && pl.pagado < pl.precio ? ` <small>(lleva ${dinero(pl.pagado)})</small>` : ''}</span></label>
+                        <label class="check"><input type="checkbox" id="insPlEnt" ${pl && pl.entregada ? 'checked' : ''}> <span>Ya se le entregó</span></label>
                     </div>
-                    <div class="campo"><label>Precio</label><input id="insPlPrecio" inputmode="decimal" value="${pl ? pl.precio : (precioMerch(tipoPl) || '')}"></div>
-                    <label class="check"><input type="checkbox" id="insPlPag" ${!pl || estaPagada(pl) ? 'checked' : ''}> <span>Ya la pagó${parcial ? ` <small>(lleva ${dinero(pl.pagado)})</small>` : ''}</span></label>
-                    <label class="check"><input type="checkbox" id="insPlEnt" ${pl && pl.entregada ? 'checked' : ''}> <span>Ya se le entregó</span></label>
-                </div>
                 <div class="campo"><label>Notas (opcional)</label><input id="insNotas" type="text" value="${esc(i ? i.notas : '')}"></div>
                 <button class="btn-main btn-verde" onclick="guardarInscritoForm()">💾 Guardar</button>
                 <button class="btn-main btn-gris" onclick="cerrarModal()">Cancelar</button>
                 ${i ? `<button class="btn-rojo-txt" onclick="quitarInscrito(${k})">Quitar de la actividad</button>` : ''}`;
             $('modal').classList.add('show');
-            mostrarEdadIns();
-            if (!i) setTimeout(() => $('insBusca') && $('insBusca').focus(), 50);
         }
-        function mostrarEdadIns() {
-            const c = $('insCumple'), e = $('insEdad');
-            if (c && e) e.value = c.value ? (txtEdad(edadDe(c.value)) || 'Revisa la fecha') : '';
+        function tipoIns(alumno) {
+            INS.alumno = alumno; INS.idAlumno = '';
+            $('tAl').classList.toggle('sel', alumno); $('tNu').classList.toggle('sel', !alumno);
+            $('insAlumno').style.display = alumno ? '' : 'none';
+            $('insDatos').style.display = alumno ? 'none' : '';
+            if (!alumno) { $('insNom').value = ''; $('insTutor').value = ''; $('insTel').value = ''; }
         }
-        function tipoIns(nuevo) {
-            INS.nuevo = nuevo; INS.idAlumno = ''; INS.elegido = null;
-            $('tAl').classList.toggle('sel', !nuevo); $('tNu').classList.toggle('sel', nuevo);
-            $('insBuscaBox').style.display = nuevo ? 'none' : '';
-            $('insDatos').style.display = nuevo ? '' : 'none';
-            $('insCumpleBox').style.display = '';
-            $('insBusca').value = ''; $('insInfo').innerHTML = '';
-            ['insNom', 'insTutor', 'insTel', 'insCumple'].forEach(x => $(x).value = '');
-            mostrarEdadIns();
-            if (nuevo) $('insNom').focus();
-        }
-        function elegirNinoIns(nombre) {
-            const n = listaNinos().find(x => x.nombre === nombre);
-            INS.elegido = n || null; INS.idAlumno = n && n.alumno ? n.id : '';
-            if (!n) { $('insDatos').style.display = 'none'; $('insInfo').innerHTML = ''; return; }
-            $('insNom').value = n.nombre; $('insTutor').value = n.tutor || ''; $('insTel').value = n.telefono || ''; $('insCumple').value = n.cumple || '';
-            $('insCumpleBox').style.display = n.alumno ? 'none' : '';
-            $('insDatos').style.display = '';
-            const ya = inscritosDe(INS.act).some(x => sinAcentos(x.nino) === sinAcentos(n.nombre));
-            $('insInfo').innerHTML = `<div class="aviso" style="text-align:left;margin:-4px 0 12px;background:#eef6ff;color:#1f3a5f">👦 <b>${txtEdad(n.edad) || 'Sin fecha de nacimiento'}</b> · ${n.alumno ? (n.activo ? 'Alumno activo' : 'Alumno inactivo') : 'Vino a otra actividad'}${ya ? '<br>⚠️ Ya está inscrito en esta actividad' : ''}</div>`;
-            mostrarEdadIns();
+        function elegirAlumnoIns(nombre) {
+            const al = DATA.alumnos.find(x => x.alumno === nombre);
+            INS.idAlumno = al ? al.id : '';
+            if (al) { $('insNom').value = al.alumno; $('insTutor').value = al.padre || ''; $('insTel').value = al.telefono || ''; $('insDatos').style.display = ''; }
         }
         async function guardarInscritoForm() {
             const nino = $('insNom').value.trim();
-            if (!INS.fila && !INS.nuevo && !INS.elegido) return alert('Elige al niño de la lista (o cambia a "Niño nuevo").');
+            if (INS.alumno && !INS.fila && !INS.idAlumno) return alert('Elige al alumno de la lista (o cambia a "Niño nuevo").');
             if (!nino) return alert('Escribe el nombre del niño.');
-            const cumple = INS.idAlumno ? '' : $('insCumple').value;
-            if (cumple && edadDe(cumple) === '') return alert('Revisa la fecha de nacimiento.');
-            if (INS.nuevo && !cumple && !confirm('No pusiste la fecha de nacimiento, así que no se sabrá su edad. ¿Guardar así?')) return;
-            if (!INS.fila && inscritosDe(INS.act).some(x => sinAcentos(x.nino) === sinAcentos(nino)) && !confirm(`${nino} ya está inscrito en esta actividad. ¿Inscribirlo otra vez?`)) return;
-            const inscrito = { fila: INS.fila, act: INS.act, nino, idAlumno: INS.idAlumno, tutor: $('insTutor').value.trim(), telefono: $('insTel').value, cumple,
+            const inscrito = { fila: INS.fila, act: INS.act, nino, idAlumno: INS.idAlumno, tutor: $('insTutor').value.trim(), telefono: $('insTel').value,
                 dias: $('insDias') ? aNum($('insDias').value) : '', total: aNum($('insTotal').value) || 0, pagado: aNum($('insPag').value) || 0, notas: $('insNotas').value.trim() };
             if (inscrito.pagado > inscrito.total && !confirm('Pagó más del total. ¿Guardar así?')) return;
             if ($('insPl') && $('insPl').checked) {
-                const precio = aNum($('insPlPrecio').value) || 0, pl = INS.pl, parcial = pl && pl.pagado > 0 && pl.pagado < pl.precio;
-                inscrito.merch = { tipo: $('insPlTipo').value, talla: $('insPlTalla').value, precio, entregada: $('insPlEnt').checked };
-                if ($('insPlPag').checked) inscrito.merch.pagada = true;
-                else if (parcial) inscrito.merch.pagado = pl.pagado;     // conserva lo que ya había abonado
-                else inscrito.merch.pagada = false;
-                if (pl) Object.assign(inscrito.merch, { fila: pl.fila, nombreAnterior: pl.nombre, fecha: pl.fecha });
+                const precio = aNum($('insPlPrecio').value) || 0;
+                const pl = INS.pl, parcial = pl && pl.pagado > 0 && pl.pagado < pl.precio;
+                inscrito.playera = { talla: $('insPlTalla').value, precio, pagado: $('insPlPag').checked ? precio : (parcial ? pl.pagado : 0), entregada: $('insPlEnt').checked };
+                if (pl) Object.assign(inscrito.playera, { fila: pl.fila, nombreAnterior: pl.nombre, fecha: pl.fecha });
             }
             if (!(await enviar({ accion: 'guardarInscrito', inscrito }))) return;
             toast(INS.fila ? '✅ Datos actualizados' : '✅ Niño inscrito'); render();
         }
         async function quitarInscrito(k) {
             const i = ACT_INS[k];
-            if (!confirm(`¿Quitar a ${i.nino} de esta actividad?\n\nSi compró merch, esa venta se queda en 👕 Merch.`)) return;
+            if (!confirm(`¿Quitar a ${i.nino} de esta actividad?\n\nSi compró playera, esa venta se queda en Playeras.`)) return;
             if (!(await enviar({ accion: 'borrarInscrito', fila: i.fila, act: i.act, nino: i.nino }))) return;
             toast('Inscripción quitada'); render();
         }
@@ -3647,92 +3590,62 @@ En el concepto escriba el nombre del alumno, por favor.`;
         }
 
         // =====================================================================
-        //  MERCH DE LA ESCUELA (playeras y sudaderas) — inventario por tipo y talla
+        //  PLAYERAS DE LA ESCUELA — inventario por talla
         // =====================================================================
-        const TIPOS_MERCH = ['Playera', 'Sudadera'];
-        const ICO_MERCH = { Playera: '👕', Sudadera: '🧥' };
-        const tipoDe = v => v.tipo || 'Playera';
-        const cfgMerch = t => { const py = DATA.playeras || {}; return (py.precios || {})[t] || (t === 'Playera' ? { precio: py.precio, costo: py.costo } : {}) || {}; };
-        const precioMerch = t => Number(cfgMerch(t).precio) || 0;
-        const costoMerch = t => Number(cfgMerch(t).costo) || 0;
-        // Solo se marca como pagada cuando ya pagó el precio completo
-        const estaPagada = v => v.pagada != null ? !!v.pagada : (v.pagado > 0 && v.pagado >= v.precio);
-        // Casilla de pago: ✓ verde si ya pagó, puntito gris si no. Se marca/desmarca con un toque.
-        function chkPago(k, v) {
-            if (!v.precio) return '<span class="t-sub" style="display:inline;margin:0">Sin costo</span>';
-            const ok = estaPagada(v), parcial = !ok && v.pagado > 0;
-            return `<button class="pago-chk ${ok ? 'on' : ''}" title="${ok ? 'Pagada · toca para desmarcar' : 'Sin pagar · toca cuando pague'}" onclick="event.stopPropagation(); togglePagoMerch(${k})">${ok ? '✓' : ''}</button>${parcial ? ` <small class="rojo">lleva ${dinero(v.pagado)}</small>` : ''}`;
-        }
-
-        let PL_LISTA = [], MERCH_FILTRO = '';
-        function stockMerch() {
+        let PL_LISTA = [];
+        function stockPlayeras() {
             const py = DATA.playeras || { ventas: [], compras: [], tallas: [] }, st = {};
-            const de = (t, ta) => { const x = t + '|' + ta; return st[x] = st[x] || { tipo: t, talla: ta, compradas: 0, vendidas: 0 }; };
-            TIPOS_MERCH.forEach(t => (py.tallas || []).forEach(ta => de(t, ta)));
-            (py.compras || []).forEach(c => de(tipoDe(c), c.talla).compradas += c.cantidad);
-            (py.ventas || []).forEach(v => de(tipoDe(v), v.talla).vendidas++);
-            return Object.values(st);
+            py.tallas.forEach(t => st[t] = { compradas: 0, vendidas: 0 });
+            py.compras.forEach(c => { st[c.talla] = st[c.talla] || { compradas: 0, vendidas: 0 }; st[c.talla].compradas += c.cantidad; });
+            py.ventas.forEach(v => { st[v.talla] = st[v.talla] || { compradas: 0, vendidas: 0 }; st[v.talla].vendidas++; });
+            return st;
         }
         function vistaPlayeras() {
             if (!esAdmin()) { location.replace('#/'); return; }
-            const py = DATA.playeras || { ventas: [], compras: [], tallas: [] };
-            header('👕 Merch', !DESK, `<button class="btn-mini" onclick="formVentaPlayera()">➕${DESK ? ' Venta' : ''}</button><button class="btn-mini" onclick="formCompraPlayeras()">📦${DESK ? ' Compra' : ''}</button><button class="btn-mini" onclick="formConfigPlayeras()">⚙️</button>`);
+            const py = DATA.playeras || { ventas: [], compras: [], tallas: [], precio: 0 };
+            header('👕 Playeras', !DESK, `<button class="btn-mini" onclick="formVentaPlayera()">➕${DESK ? ' Venta' : ''}</button><button class="btn-mini" onclick="formCompraPlayeras()">📦${DESK ? ' Compra' : ''}</button><button class="btn-mini" onclick="formConfigPlayeras()">⚙️</button>`);
             if (DESK) lleno();
-            const st = stockMerch();
-            // Las sudaderas aparecen en cuanto tengan alguna compra o venta
-            const tiposVis = TIPOS_MERCH.filter(t => t === 'Playera' || st.some(x => x.tipo === t && (x.compradas || x.vendidas)));
-            PL_LISTA = (py.ventas || []).filter(v => !MERCH_FILTRO || tipoDe(v) === MERCH_FILTRO)
-                .sort((a, b) => (a.entregada - b.entregada) || (a.fecha < b.fecha ? 1 : -1));
-            const porEntregar = PL_LISTA.filter(v => !v.entregada).length, porCobrar = PL_LISTA.reduce((t, v) => t + Math.max(0, v.precio - v.pagado), 0);
-            const tile = x => { const ex = x.compradas - x.vendidas;
-                return `<div class="kpi pl-talla"><span>Talla ${esc(x.talla)}</span><b style="color:${ex <= 0 ? '#c0392b' : ex <= 2 ? '#b9770e' : ''}">${ex}</b><span>en existencia · ${x.vendidas} vendida${x.vendidas === 1 ? '' : 's'}</span></div>`; };
+            const st = stockPlayeras();
+            PL_LISTA = py.ventas.slice().sort((a, b) => (a.entregada - b.entregada) || (a.fecha < b.fecha ? 1 : -1));
+            const porEntregar = py.ventas.filter(v => !v.entregada).length, porCobrar = py.ventas.reduce((t, v) => t + Math.max(0, v.precio - v.pagado), 0);
             main(`
-                ${tiposVis.map(t => `<div class="merch-tipo">${tiposVis.length > 1 ? `<div class="pn-sec" style="margin:0 0 8px">${ICO_MERCH[t]} ${t}s</div>` : ''}
-                    <div class="pl-tallas">${st.filter(x => x.tipo === t).map(tile).join('')}</div></div>`).join('')}
-                ${tiposVis.length < TIPOS_MERCH.length ? '<p class="ayuda" style="text-align:left;margin:-6px 0 12px">🧥 Las sudaderas aparecen aquí en cuanto registres su primera compra (📦 Compra → Sudadera).</p>' : ''}
-                ${!precioMerch('Playera') ? '<div class="aviso" style="margin:0 0 12px">⚙️ Pon el precio de la playera (y de la sudadera) con el botón ⚙️ para que se llene solo al vender.</div>' : ''}
+                <div class="pl-tallas">${Object.keys(st).map(t => { const ex = st[t].compradas - st[t].vendidas;
+                    return `<div class="kpi pl-talla"><span>Talla ${esc(t)}</span><b style="color:${ex <= 0 ? '#c0392b' : ex <= 2 ? '#b9770e' : ''}">${ex}</b><span>en existencia · ${st[t].vendidas} vendida${st[t].vendidas === 1 ? '' : 's'}</span></div>`; }).join('')}</div>
+                ${!py.precio ? '<div class="aviso" style="margin:0 0 12px">⚙️ Pon el precio de la playera con el botón ⚙️ para que se llene solo al vender.</div>' : ''}
                 <div class="res-card pl-ventas">
-                    <div class="res-tit"><b>Ventas</b><span class="sub" style="margin:0">${porEntregar} por entregar · ${dinero(porCobrar)} por cobrar</span><div class="grow"></div>
-                        <div class="tabs">${[['', 'Todo'], ['Playera', '👕 Playeras'], ['Sudadera', '🧥 Sudaderas']].map(([v, t]) => `<button class="tab tab-ch ${MERCH_FILTRO === v ? 'sel' : ''}" onclick="MERCH_FILTRO = '${v}'; render()">${t}</button>`).join('')}</div></div>
+                    <div class="res-tit"><b>Ventas</b><span class="sub" style="margin:0">${porEntregar} por entregar · ${dinero(porCobrar)} por cobrar</span></div>
                     ${PL_LISTA.length && !DESK ? `<div class="lista" style="margin-top:0;box-shadow:none">${PL_LISTA.map((v, k) => `<div class="fila" style="cursor:default;padding:12px 4px">
-                            ${chkPago(k, v)}
-                            <span class="fila-nom">${esc(v.nombre)}<br><span class="res-grupo">${ICO_MERCH[tipoDe(v)]} ${esc(tipoDe(v))} ${esc(v.talla)} · ${v.fecha ? fFecha(v.fecha) : 'Historial'}${v.act && actividad(v.act) ? ' · 🎉 ' + esc(actividad(v.act).nombre) : ''}</span></span>
-                            ${v.entregada ? '<span title="Entregada">📦✅</span>' : `<button class="btn-mini" onclick="entregarPlayera(${k})">Entregar</button>`}
+                            <span class="inv-emoji" style="font-size:1rem;font-weight:800">${esc(v.talla)}</span>
+                            <span class="fila-nom">${esc(v.nombre)}<br><span class="res-grupo">${v.fecha ? fFecha(v.fecha) : 'Historial'} · ${v.pagado >= v.precio ? 'pagada' : `<b class="rojo">debe ${dinero(v.precio - v.pagado)}</b>`}${v.act && actividad(v.act) ? ' · 🎉 ' + esc(actividad(v.act).nombre) : ''}</span></span>
+                            ${v.entregada ? '<span title="Entregada">✅</span>' : `<button class="btn-mini" onclick="entregarPlayera(${k})">Entregar</button>`}
                             <button class="inv-btn gris" onclick="formVentaPlayera(${k})">✏️</button></div>`).join('')}</div>`
                     : PL_LISTA.length ? `<div class="tabla-caja"><table class="tabla compacta" style="box-shadow:none">
-                        <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Talla</th><th class="num">Precio</th><th style="text-align:center">Pagó</th><th>Entrega</th><th></th></tr></thead>
+                        <thead><tr><th>Fecha</th><th>Nombre</th><th>Talla</th><th class="num">Precio</th><th class="num">Pagó</th><th>Entrega</th><th></th></tr></thead>
                         <tbody>${PL_LISTA.map((v, k) => `<tr style="cursor:default"><td style="white-space:nowrap">${v.fecha ? fFecha(v.fecha) : '<span class="t-sub" style="margin:0">Historial</span>'}</td>
                             <td><b>${esc(v.nombre)}</b>${v.act && actividad(v.act) ? `<span class="t-sub">🎉 ${esc(actividad(v.act).nombre)}</span>` : ''}</td>
-                            <td style="white-space:nowrap">${ICO_MERCH[tipoDe(v)]} ${esc(tipoDe(v))}</td><td>${esc(v.talla)}</td><td class="num">${dinero(v.precio)}</td>
-                            <td style="text-align:center;white-space:nowrap">${chkPago(k, v)}</td>
+                            <td>${esc(v.talla)}</td><td class="num">${dinero(v.precio)}</td>
+                            <td class="num">${v.pagado >= v.precio ? dinero(v.pagado) : `<b class="rojo">${dinero(v.pagado)}</b>`}</td>
                             <td>${v.entregada ? '✅ Entregada' : `<button class="btn-mini" onclick="entregarPlayera(${k})">📦 Entregar</button>`}</td>
                             <td class="acc"><button class="b-pago" title="Editar" onclick="formVentaPlayera(${k})">✏️</button><button class="b-borrar" title="Borrar" onclick="borrarPlayeraUI(${k})">✕</button></td></tr>`).join('')}</tbody></table></div>`
                       : '<div class="vacio" style="padding:30px 10px">Sin ventas registradas.</div>'}
                 </div>`);
         }
-        async function togglePagoMerch(k) {
-            const v = PL_LISTA[k], pagada = !estaPagada(v);
-            if (!(await enviar({ accion: 'pagoMerch', fila: v.fila, nombre: v.nombre, pagada }))) return;
-            toast(pagada ? '✅ Marcada como pagada' : 'Marcada como no pagada'); render();
-        }
         function formVentaPlayera(k) {
             const v = k != null ? PL_LISTA[k] : null, py = DATA.playeras;
-            const ninos = listaNinos().slice().sort((x, y) => comparar(x.nombre, y.nombre));
-            const tipo = v ? tipoDe(v) : 'Playera', parcial = v && !estaPagada(v) && v.pagado > 0;
+            const alumnos = DATA.alumnos.slice().sort((x, y) => comparar(x.alumno, y.alumno));
             $('modalIn').innerHTML = `
-                <h2>${v ? '✏️ Editar venta' : '👕 Vender merch'}</h2>
-                <div class="campo"><label>Nombre</label><input id="pvNom" list="listaNinosPl" value="${esc(v ? v.nombre : '')}" placeholder="Alumno, maestra o niño de una actividad">
-                    <datalist id="listaNinosPl">${ninos.map(n => `<option value="${esc(n.nombre)}">${esc([txtEdad(n.edad), n.alumno ? (n.activo ? 'Alumno' : 'Alumno inactivo') : ''].filter(Boolean).join(' · '))}</option>`).join('')}</datalist></div>
+                <h2>${v ? '✏️ Editar venta' : '👕 Vender playera'}</h2>
+                <div class="campo"><label>Nombre</label><input id="pvNom" list="listaAlumnosPl" value="${esc(v ? v.nombre : '')}" placeholder="Alumno, maestra o niño de una actividad">
+                    <datalist id="listaAlumnosPl">${alumnos.map(x => `<option value="${esc(x.alumno)}">${esc(x.grupo)}</option>`).join('')}</datalist></div>
                 <div class="dos">
-                    <div class="campo"><label>Tipo</label><select id="pvTipo" onchange="$('pvPrecio').value = precioMerch(this.value) || ''">${TIPOS_MERCH.map(t => `<option ${t === tipo ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
                     <div class="campo"><label>Talla</label><select id="pvTalla">${py.tallas.concat(v && !py.tallas.includes(v.talla) ? [v.talla] : []).map(t => `<option ${v && v.talla === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+                    <div class="campo"><label>Precio</label><input id="pvPrecio" inputmode="decimal" value="${v ? v.precio : (py.precio || '')}" oninput="${v ? '' : "$('pvPag').value = this.value"}"></div>
                 </div>
                 <div class="dos">
-                    <div class="campo"><label>Precio</label><input id="pvPrecio" inputmode="decimal" value="${v ? v.precio : (precioMerch(tipo) || '')}"></div>
+                    <div class="campo"><label>Pagó</label><input id="pvPag" inputmode="decimal" value="${v ? v.pagado : (py.precio || '')}"></div>
                     <div class="campo"><label>Fecha de compra</label><input id="pvFecha" type="date" value="${v ? v.fecha : hoy()}"></div>
                 </div>
                 ${v && !v.fecha ? '<p class="ayuda" style="margin:-6px 0 10px;text-align:left">Si no sabes la fecha, déjala vacía y se queda como "Historial".</p>' : ''}
-                <label class="check"><input type="checkbox" id="pvPag" ${!v || estaPagada(v) ? 'checked' : ''}> <span>Ya pagó${parcial ? ` <small>(lleva ${dinero(v.pagado)}; si no la marcas, se conserva ese abono)</small>` : ''}</span></label>
                 <label class="check"><input type="checkbox" id="pvEnt" ${v && v.entregada ? 'checked' : ''}> <span>Ya se entregó</span></label>
                 <button class="btn-main btn-verde" onclick="guardarVentaPlForm(${k != null ? k : -1})">💾 Guardar</button>
                 <button class="btn-main btn-gris" onclick="cerrarModal()">Cancelar</button>`;
@@ -3740,40 +3653,35 @@ En el concepto escriba el nombre del alumno, por favor.`;
         }
         async function guardarVentaPlForm(k) {
             const v = k >= 0 ? PL_LISTA[k] : null;
-            const nombre = $('pvNom').value.trim(), n = listaNinos().find(x => x.nombre === nombre && x.alumno);
-            const venta = { fila: v ? v.fila : 0, nombreAnterior: v ? v.nombre : '', nombre, idAlumno: n ? n.id : (v ? v.idAlumno : ''), tipo: $('pvTipo').value, talla: $('pvTalla').value,
-                precio: aNum($('pvPrecio').value) || 0, entregada: $('pvEnt').checked, act: v ? v.act : '', fecha: $('pvFecha').value, fijarFecha: true };
-            if ($('pvPag').checked) venta.pagada = true;
-            else if (v && v.pagado > 0 && !estaPagada(v)) venta.pagado = v.pagado;   // conserva el abono
-            else venta.pagada = false;
+            const nombre = $('pvNom').value.trim(), al = DATA.alumnos.find(x => x.alumno === nombre);
+            const venta = { fila: v ? v.fila : 0, nombreAnterior: v ? v.nombre : '', nombre, idAlumno: al ? al.id : (v ? v.idAlumno : ''), talla: $('pvTalla').value,
+                precio: aNum($('pvPrecio').value) || 0, pagado: aNum($('pvPag').value) || 0, entregada: $('pvEnt').checked, act: v ? v.act : '', fecha: $('pvFecha').value, fijarFecha: true };
             if (!nombre) return alert('Escribe el nombre.');
             if (!(await enviar({ accion: 'guardarVentaPlayera', venta }))) return;
-            toast('✅ Venta guardada'); render();
+            toast('✅ Playera guardada'); render();
         }
         async function entregarPlayera(k) {
-            const venta = Object.assign({}, PL_LISTA[k], { nombreAnterior: PL_LISTA[k].nombre, entregada: true });
-            delete venta.pagada;   // no toca lo pagado
-            if (!(await enviar({ accion: 'guardarVentaPlayera', venta }))) return;
+            const v = PL_LISTA[k];
+            if (!(await enviar({ accion: 'guardarVentaPlayera', venta: Object.assign({}, v, { nombreAnterior: v.nombre, entregada: true }) }))) return;
             toast('✅ Marcada como entregada'); render();
         }
         async function borrarPlayeraUI(k) {
             const v = PL_LISTA[k];
-            if (!confirm(`¿Borrar la venta de ${tipoDe(v).toLowerCase()} de ${v.nombre} (talla ${v.talla})?`)) return;
+            if (!confirm(`¿Borrar la venta de playera de ${v.nombre} (talla ${v.talla})?`)) return;
             if (!(await enviar({ accion: 'borrarVentaPlayera', fila: v.fila, nombre: v.nombre }))) return;
             toast('Venta borrada'); render();
         }
         function formCompraPlayeras() {
             const py = DATA.playeras;
             $('modalIn').innerHTML = `
-                <h2>📦 Compra de merch</h2>
+                <h2>📦 Compra de playeras</h2>
                 <div class="dos">
-                    <div class="campo"><label>Tipo</label><select id="pcTipo" onchange="$('pcCosto').value = costoMerch(this.value) || ''">${TIPOS_MERCH.map(t => `<option>${t}</option>`).join('')}</select></div>
                     <div class="campo"><label>Fecha</label><input id="pcFecha" type="date" value="${hoy()}"></div>
+                    <div class="campo"><label>Costo por pieza</label><input id="pcCosto" inputmode="decimal" value="${py.costo || ''}" placeholder="$0"></div>
                 </div>
-                <div class="campo"><label>Costo por pieza</label><input id="pcCosto" inputmode="decimal" value="${costoMerch('Playera') || ''}" placeholder="$0"></div>
                 <div class="campo"><label>Piezas por talla</label>
                     <div class="pl-compra">${py.tallas.map((t, k) => `<div><span>${esc(t)}</span><input id="pcT${k}" inputmode="numeric" placeholder="0"></div>`).join('')}</div></div>
-                <p class="ayuda" style="text-align:left;margin-top:-4px">Se suma a la existencia y el total se registra en 💸 Gastos (categoría Merch).</p>
+                <p class="ayuda" style="text-align:left;margin-top:-4px">Se suma a la existencia y el total se registra en 💸 Gastos (categoría Playeras).</p>
                 <button class="btn-main btn-verde" onclick="guardarCompraPl()">💾 Guardar compra</button>
                 <button class="btn-main btn-gris" onclick="cerrarModal()">Cancelar</button>`;
             $('modal').classList.add('show');
@@ -3782,28 +3690,25 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const py = DATA.playeras;
             const items = py.tallas.map((t, k) => ({ talla: t, cantidad: aNum($('pcT' + k).value) || 0 })).filter(x => x.cantidad > 0);
             if (!items.length) return alert('Escribe cuántas piezas compraste de cada talla.');
-            if (!(await enviar({ accion: 'compraPlayeras', tipo: $('pcTipo').value, fecha: $('pcFecha').value, costo: aNum($('pcCosto').value) || 0, items }))) return;
+            if (!(await enviar({ accion: 'compraPlayeras', fecha: $('pcFecha').value, costo: aNum($('pcCosto').value) || 0, items }))) return;
             toast('✅ Compra registrada'); render();
         }
         function formConfigPlayeras() {
             const py = DATA.playeras;
             $('modalIn').innerHTML = `
-                <h2>⚙️ Merch</h2>
-                ${TIPOS_MERCH.map(t => `<div class="pago-sub" style="margin-top:4px">${ICO_MERCH[t]} ${t}</div>
+                <h2>⚙️ Playeras</h2>
                 <div class="dos">
-                    <div class="campo"><label>Precio de venta</label><input id="cfPrecio${t}" inputmode="decimal" value="${precioMerch(t) || ''}"></div>
-                    <div class="campo"><label>Costo por pieza</label><input id="cfCosto${t}" inputmode="decimal" value="${costoMerch(t) || ''}"></div>
-                </div>`).join('')}
-                <div class="campo"><label>Tallas (separadas por coma, las mismas para los dos)</label><input id="cfTallas" type="text" value="${esc(py.tallas.join(', '))}"></div>
+                    <div class="campo"><label>Precio de venta</label><input id="cfPrecio" inputmode="decimal" value="${py.precio || ''}"></div>
+                    <div class="campo"><label>Costo por pieza</label><input id="cfCosto" inputmode="decimal" value="${py.costo || ''}"></div>
+                </div>
+                <div class="campo"><label>Tallas (separadas por coma)</label><input id="cfTallas" type="text" value="${esc(py.tallas.join(', '))}"></div>
                 <button class="btn-main btn-verde" onclick="guardarConfigPl()">💾 Guardar</button>
                 <button class="btn-main btn-gris" onclick="cerrarModal()">Cancelar</button>`;
             $('modal').classList.add('show');
         }
         async function guardarConfigPl() {
             const tallas = $('cfTallas').value.split(',').map(t => t.trim()).filter(Boolean);
-            const precios = {};
-            TIPOS_MERCH.forEach(t => precios[t] = { precio: aNum($('cfPrecio' + t).value) || 0, costo: aNum($('cfCosto' + t).value) || 0 });
-            if (!(await enviar({ accion: 'configPlayeras', precios, precio: precios.Playera.precio, costo: precios.Playera.costo, tallas }))) return;
+            if (!(await enviar({ accion: 'configPlayeras', precio: aNum($('cfPrecio').value) || 0, costo: aNum($('cfCosto').value) || 0, tallas }))) return;
             toast('✅ Guardado'); render();
         }
 
@@ -3817,7 +3722,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
         });
         ['input', 'change'].forEach(ev => document.addEventListener(ev, e => { const c = e.target.closest && e.target.closest('.campo'); if (c) c.classList.remove('error'); }));
         render();
-        cargar();
+        cargar().finally(quitarSplash);   // la pantalla de carga se quita cuando llegan los datos (o si hay error / falta el PIN)
         if (pendTienda().length) setTimeout(enviarPendientes, 3000);
     </script>
 </body>
