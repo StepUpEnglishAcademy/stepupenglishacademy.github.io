@@ -349,6 +349,7 @@
         .tab { border: 1px solid #dfe3e6; background: #fff; border-radius: 20px; padding: 8px 14px; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; color: var(--text); }
         .tab.sel { background: var(--text); color: #fff; border-color: var(--text); }
         .tabs-maestras { flex-wrap: wrap; margin: 0 0 14px; }
+        body.buscando .oculta-busqueda { display: none !important; }
         .tabs-maestras .tab { white-space: nowrap; }
         @media (max-width: 700px) { .tabs-maestras { gap: 6px; } .tabs-maestras .tab { padding: 7px 11px; font-size: 0.8rem; } }
         .tabla { width: 100%; border-collapse: collapse; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); font-size: 0.88rem; }
@@ -449,6 +450,8 @@
         body.desk main.lleno #resultados { flex: 0 1 auto; overflow: auto; }
         /* Tienda y Gastos: columnas del mismo alto, la tabla hace scroll por dentro */
         body.desk main.lleno .gas-layout { align-items: stretch; min-height: 420px; }
+        body.desk main.lleno .pag-caja { flex: 1; min-height: 0; overflow: auto; }
+        body.desk main.lleno .pag-caja thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
         body.desk main.lleno .gas-izq { display: flex; flex-direction: column; min-height: 0; }
         body.desk main.lleno .tabla-caja { flex: 1; min-height: 0; overflow: auto; }
         body.desk main.lleno .tabla-caja thead th { position: sticky; top: 0; z-index: 1; }
@@ -810,6 +813,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 (py.ventas || []).concat(py.compras || []).forEach(v => v.talla = arreglarTalla(v.talla));
                 py.tallas = [...new Set((py.tallas || []).map(arreglarTalla))]; }
             DATA.gastosFijos = d.gastosFijos || [];
+            DATA.pagos = d.pagos || [];
             RESULTADO = d.resultado || null;
             CARGADO = true;
             ULTIMA_CARGA = Date.now();
@@ -859,11 +863,19 @@ En el concepto escriba el nombre del alumno, por favor.`;
             }
         }
 
+        // Protección contra duplicados: cada envío lleva un "uid". Si falla la conexión y vuelves a dar
+        // Guardar con los mismos datos, se reenvía el MISMO uid; si en realidad sí se había guardado,
+        // el servidor lo reconoce y no lo escribe dos veces.
+        let ULT_FALLO = (() => { try { return JSON.parse(lsGet('ult_fallo') || 'null'); } catch (e) { return null; } })();
+        const nuevoUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         async function enviar(body) {
             cargando(true, true);
             $('loading').textContent = '⏳ Guardando…';
+            const clave = JSON.stringify(body);
+            const uid = ULT_FALLO && ULT_FALLO.clave === clave && Date.now() - ULT_FALLO.t < 6 * 3600e3 ? ULT_FALLO.uid : nuevoUid();
             try {
                 body.pin = pin();
+                body.uid = uid;
                 if (!RAW) body.completo = true;   // sin datos previos del servidor: pide todo
                 const r = await fetch(URL_SCRIPT, {
                     method: 'POST',
@@ -871,9 +883,17 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     body: JSON.stringify(body)
                 });
                 recibir(await r.json());
+                if (ULT_FALLO) { ULT_FALLO = null; lsSet('ult_fallo', null); }
                 return true;
             } catch (e) {
-                alert(e instanceof TypeError ? '❌ No se pudo guardar. Revisa tu conexión e intenta de nuevo.' : errorTexto(e));
+                if (e instanceof TypeError) {
+                    // No llegó la respuesta: puede que SÍ se haya guardado. Se recuerda el uid por si lo reintentas.
+                    ULT_FALLO = { clave, uid, t: Date.now() }; lsSet('ult_fallo', JSON.stringify(ULT_FALLO));
+                    alert('⚠️ No se pudo confirmar si se guardó (falló la conexión).\n\nPuede que sí se haya registrado. Revisa antes de capturarlo otra vez' +
+                          (body.accion === 'registrarPago' || body.accion === 'abonarPago' ? ' (📅 Calendario / Pagos → 🧾 Tabla de pagos).' : '.') +
+                          '\n\nSi le vuelves a dar Guardar sin cambiar nada, la app no lo duplica.');
+                    setTimeout(cargar, 1500);   // intenta leer la hoja para mostrar lo que sí quedó guardado
+                } else alert(errorTexto(e));
                 if (!(e instanceof TypeError) && e.message !== 'pin' && e.message !== 'bloqueado') setTimeout(cargar, 0);   // vuelve a leer la hoja
                 return false;
             } finally {
@@ -932,6 +952,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             else if (p[0] === 'playeras') vistaPlayeras();
             else if (DESK && p[0] === 'maestras') vistaMaestras();
             else if (DESK && p[0] === 'gastos') vistaGastos();
+            else if (p[0] === 'pagos') vistaTablaPagos();
             else if (p[0] === 'g' && p[1]) { ACT.grupo = p[1]; vistaGrupo(p[1]); }
             else if (p[0] === 'r' && p[1]) { ACT.grupo = p[1]; vistaRegistrar(p[1], p[2] || ''); }
             else if (p[0] === 'a' && p[1]) vistaAlumno(p[1]);
@@ -952,6 +973,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
 
         // ---------- VISTA: grupos ----------
         function vistaGrupos() {
+            document.body.classList.remove('buscando');
             header(LOGO, false, DESK ? '' : `${esAdmin() ? `<button class="btn-mini" onclick="ir('#/cobranza')">💰 Cobranza</button><button class="btn-mini" onclick="ir('#/nuevo')">➕ Alumno</button>` : ''}<button class="btn-mini" onclick="cargar()">🔄</button>`);
             const grupos = [...new Set(DATA.alumnos.map(a => a.grupo).concat(esAdmin() ? (DATA.grupos || []).map(g => g.nombre) : []))].sort(comparar);
             LISTA = grupos;
@@ -967,8 +989,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     <button class="limpiar" id="limpiar" onclick="$('buscar').value=''; buscar('')">✕</button>
                 </div>
                 <div id="resultados"></div>
-                ${esAdmin() && !DESK && DATA.actividades ? `<div class="dos" style="margin-bottom:16px"><button class="btn-tienda" style="margin:0" onclick="ir('#/actividades')"><span>🎉</span> Actividades</button><button class="btn-tienda" style="margin:0" onclick="ir('#/playeras')"><span>👕</span> Playeras</button></div>` : ''}
-                ${DATA.tienda && !DESK ? `<button class="btn-tienda" onclick="ir('#/vender')"><span>🛍️</span> Tienda${pendTienda().length ? ` <small>· ${pendTienda().length} por enviar</small>` : ''}<span class="chev" style="margin-left:auto">›</span></button>` : ''}
+                ${esAdmin() && !DESK && DATA.actividades ? `<div class="dos oculta-busqueda" style="margin-bottom:16px"><button class="btn-tienda" style="margin:0" onclick="ir('#/actividades')"><span>🎉</span> Actividades</button><button class="btn-tienda" style="margin:0" onclick="ir('#/playeras')"><span>👕</span> Playeras</button></div>` : ''}
+                ${DATA.tienda && !DESK ? `<button class="btn-tienda oculta-busqueda" onclick="ir('#/vender')"><span>🛍️</span> Tienda${pendTienda().length ? ` <small>· ${pendTienda().length} por enviar</small>` : ''}<span class="chev" style="margin-left:auto">›</span></button>` : ''}
                 ${tabsMaestras(grupos)}
                 <div id="gruposGrid" class="grid">${grupos.map((g, i) => {
                 if (!enTabMaestra(g)) return '';
@@ -981,8 +1003,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     <div class="sub">${u ? 'Última: ' + fFecha(u) : 'Sin clases aún'}</div>
                 </div>`;
             }).join('')}${esAdmin() ? `<div class="card card-nuevo" onclick="ir('#/grupo/nuevo')"><div class="emoji">➕</div><div class="nombre">Nuevo grupo</div></div>` : ''}</div>
-                ${esAdmin() && !DESK && (DATA.bajas || []).length ? `<p class="ayuda" style="margin-top:24px"><span class="link-pin" onclick="ir('#/bajas')">Alumnos dados de baja (${DATA.bajas.length})</span></p>` : ''}
-                ${DESK ? '' : `<p class="ayuda" style="margin-top:${esAdmin() && (DATA.bajas || []).length ? '8' : '24'}px">${esAdmin() ? '🔑 Administrador' : '👩‍🏫 Maestra'} · <span class="link-pin" onclick="cambiarPin()">Cambiar PIN</span>${esAdmin() && pantallaAncha() ? ' · <span class="link-pin" onclick="usarModo(\'pc\')">🖥️ Versión computadora</span>' : ''}</p>`}`);
+                ${esAdmin() && !DESK && (DATA.bajas || []).length ? `<p class="ayuda oculta-busqueda" style="margin-top:24px"><span class="link-pin" onclick="ir('#/bajas')">Alumnos dados de baja (${DATA.bajas.length})</span></p>` : ''}
+                ${DESK ? '' : `<p class="ayuda oculta-busqueda" style="margin-top:${esAdmin() && (DATA.bajas || []).length ? '8' : '24'}px">${esAdmin() ? '🔑 Administrador' : '👩‍🏫 Maestra'} · <span class="link-pin" onclick="cambiarPin()">Cambiar PIN</span>${esAdmin() && pantallaAncha() ? ' · <span class="link-pin" onclick="usarModo(\'pc\')">🖥️ Versión computadora</span>' : ''}</p>`}`);
         }
 
         // ---- Pestañas por maestra en Grupos (la elegida se recuerda en cada celular) ----
@@ -1027,7 +1049,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             if (TAB_M && TAB_M !== SIN_M && !ms.includes(TAB_M)) TAB_M = '';
             TABS_M = ['', ...ms, SIN_M];
             const t = (v, txt) => `<button class="tab ${TAB_M === v ? 'sel' : ''}" onclick="elegirTabMaestra(TABS_M[${TABS_M.indexOf(v)}])">${txt}</button>`;
-            return `<div class="tabs tabs-maestras">${t('', 'Todas')}${ms.map(m => t(m, '👩‍🏫 ' + esc(m))).join('')}${sinMaestra ? t(SIN_M, 'Sin maestra') : ''}</div>`;
+            return `<div class="tabs tabs-maestras oculta-busqueda">${t('', 'Todas')}${ms.map(m => t(m, '👩‍🏫 ' + esc(m))).join('')}${sinMaestra ? t(SIN_M, 'Sin maestra') : ''}</div>`;
         }
         function elegirTabMaestra(v) { TAB_M = v; lsSet('tab_maestra', v || null); render(); }
 
@@ -1045,6 +1067,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const t = sinAcentos(q.trim());
             $('limpiar').style.display = t ? 'block' : 'none';
             $('gruposGrid').style.display = t ? 'none' : 'grid';
+            document.body.classList.toggle('buscando', !!t);   // mientras buscas, solo se ven los alumnos encontrados
             if (!t) { $('resultados').innerHTML = ''; return; }
             const palabras = t.split(/\s+/);
             RES = DATA.alumnos.filter(a => { const n = sinAcentos(a.alumno); return palabras.every(p => n.includes(p)); })
@@ -1988,7 +2011,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
         let COBRO = [];
         function vistaCobranza() {
             if (!esAdmin()) { location.hash = '#/'; return; }
-            header('💰 Cobranza', true, `<button class="btn-mini" onclick="cargar()">🔄</button>`);
+            header('💰 Cobranza', true, `<button class="btn-mini" onclick="ir('#/pagos')">🧾 Pagos</button><button class="btn-mini" onclick="cargar()">🔄</button>`);
             const hoyS = hoy();
             const en7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
             const conPago = DATA.alumnos.filter(a => a.pago);
@@ -2147,7 +2170,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 <img class="side-logo" src="${LOGO_HEAD}" alt="Step Up English">
                 <nav>
                     ${it('#/resumen', '📊', 'Resumen', r === 'resumen')}
-                    ${it('#/calendario', '📅', 'Calendario / Pagos', r === 'calendario', debe ? `<span class="side-badge ico" title="Alumnos con adeudo">${debe}</span>` : '')}
+                    ${it('#/calendario', '📅', 'Calendario / Pagos', r === 'calendario' || r === 'pagos', debe ? `<span class="side-badge ico" title="Alumnos con adeudo">${debe}</span>` : '')}
                     ${it('#/grupos', '👥', 'Grupos', ['grupos', 'g', 'r', 'a', 'grupo', 'bajas', 'editar'].includes(r))}
                     ${it('#/maestras', '👩‍🏫', 'Maestras', r === 'maestras')}
                     ${it('#/tienda', '🛍️', 'Tienda', r === 'tienda' || r === 'vender')}
@@ -2224,6 +2247,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     ${esMesActual ? '' : `<button class="btn-mini" onclick="CAL.mes = hoy().slice(0, 7); render()">Ir a hoy</button>`}
                     <div class="grow"></div>
                     ${botonCola(true)}
+                    <button class="btn-mini" onclick="ir('#/pagos')">🧾 Tabla de pagos</button>
                     ${selectGrupo()}
                 </div>
                 <div class="kpis">
@@ -2782,6 +2806,73 @@ En el concepto escriba el nombre del alumno, por favor.`;
         const CATEGORIAS_GASTO = ['Servicios', 'Material', 'Libros', 'Publicidad', 'Mobiliario', 'Limpieza y mantenimiento', 'Otros'];
         let GAS_MES = '', GAS_LISTA = [];
         let GAS_EDIT = null;   // gasto que se está editando
+        // ---------- VISTA: tabla de pagos (ver, corregir y borrar pagos sin entrar a Google Sheets) ----------
+        let PAG_MES = '', PAG_Q = '', PAG_LISTA = [];
+        function vistaTablaPagos() {
+            if (!esAdmin()) { location.hash = '#/'; return; }
+            if (!PAG_MES) PAG_MES = hoy().slice(0, 7);
+            header('🧾 Tabla de pagos', !DESK || true, '');
+            if (DESK) lleno();
+            const q = sinAcentos(PAG_Q.trim());
+            PAG_LISTA = (DATA.pagos || []).filter(p => p.fecha.slice(0, 7) === PAG_MES && (!q || sinAcentos(nombrePago(p)).includes(q)))
+                .sort((x, y) => x.fecha < y.fecha ? 1 : x.fecha > y.fecha ? -1 : y.fila - x.fila);
+            const tot = PAG_LISTA.reduce((t, p) => t + p.pagada, 0);
+            // Posibles duplicados: mismo alumno, concepto, montos y fecha
+            const firma = p => [p.id, p.concepto, p.cobrada, p.pagada, p.fecha].join('|'), cuenta = {};
+            PAG_LISTA.forEach(p => cuenta[firma(p)] = (cuenta[firma(p)] || 0) + 1);
+            const dup = p => cuenta[firma(p)] > 1, nDup = PAG_LISTA.filter(dup).length;
+            const acc = (p, i) => `<button class="b-pago" title="Editar" onclick="formEditarPago(${i})">✏️</button><button class="b-borrar" title="Borrar" onclick="borrarPagoUI(${i})">✕</button>`;
+            main(`
+                <div class="pc-barra">${selMes('PAG_MES', PAG_MES)}<div class="grow"></div><b style="font-size:1.05rem">Cobrado: ${dinero(tot)}</b></div>
+                <div class="buscador" style="margin-bottom:12px"><span class="lupa">🔍</span>
+                    <input id="pagBusca" type="search" placeholder="Filtrar por alumno…" value="${esc(PAG_Q)}" oninput="PAG_Q = this.value; clearTimeout(this._t); this._t = setTimeout(() => { render(); const el = $('pagBusca'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 250)"></div>
+                ${nDup ? `<div class="aviso" style="margin:0 0 12px;text-align:left">⚠️ Hay ${nDup} pagos que parecen repetidos (mismo alumno, concepto, monto y fecha). Están marcados en amarillo: si sobra uno, bórralo con ✕.</div>` : ''}
+                ${!PAG_LISTA.length ? `<div class="vacio">No hay pagos registrados en ${nombreMes(PAG_MES)}${q ? ' con ese nombre' : ''}.</div>`
+                : DESK ? `<div class="res-card tabla-caja pag-caja" style="padding:0"><table class="tabla" style="box-shadow:none;border-radius:0">
+                    <thead><tr><th>Fecha</th><th>Alumno</th><th>Concepto</th><th class="num">Cobrado</th><th class="num">Pagó</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>${PAG_LISTA.map((p, i) => `<tr style="cursor:default${dup(p) ? ';background:#fff8e1' : ''}">
+                        <td style="white-space:nowrap">${fFecha(p.fecha)}</td>
+                        <td><b>${esc(nombrePago(p))}</b>${p.grupo ? `<span class="t-sub">${esc(p.grupo)}</span>` : ''}</td>
+                        <td>${esc(p.concepto)}</td><td class="num">${dinero(p.cobrada)}</td><td class="num"><b>${dinero(p.pagada)}</b></td>
+                        <td>${p.pagada >= p.cobrada ? '✅ Pagado' : `<span class="rojo">Resta ${dinero(p.cobrada - p.pagada)}</span>`}${dup(p) ? ' <small style="color:#b9770e">· ¿repetido?</small>' : ''}</td>
+                        <td class="acc">${acc(p, i)}</td></tr>`).join('')}</tbody></table></div>`
+                : `<div class="lista" style="margin-top:0">${PAG_LISTA.map((p, i) => `<div class="fila" style="cursor:default${dup(p) ? ';background:#fff8e1' : ''}">
+                        <span class="fila-nom">${esc(nombrePago(p))}<br><span class="res-grupo">${fFecha(p.fecha)} · ${esc(p.concepto)} · <b>${dinero(p.pagada)}</b>${p.pagada < p.cobrada ? ` <span class="rojo">de ${dinero(p.cobrada)}</span>` : ''}${dup(p) ? ' · <b style="color:#b9770e">¿repetido?</b>' : ''}</span></span>
+                        <button class="inv-btn gris" onclick="formEditarPago(${i})">✏️</button><button class="inv-btn gris" onclick="borrarPagoUI(${i})">✕</button></div>`).join('')}</div>`}`);
+        }
+        function nombrePago(p) { const a = alumno(p.id) || (DATA.bajas || []).find(x => x.id === p.id); return (a && (a.alumno || a.nombre)) || p.alumno || p.id; }
+        function formEditarPago(i) {
+            const p = PAG_LISTA[i], conceptos = [...new Set((DATA.conceptos || ['Mensualidad', 'Inscripción', 'Material']).concat(p.concepto))];
+            $('modalIn').innerHTML = `
+                <h2>✏️ Editar pago</h2>
+                <p class="ayuda" style="margin-top:-6px">${esc(nombrePago(p))}</p>
+                <div class="dos">
+                    <div class="campo"><label>Fecha</label><input id="epFecha" type="date" value="${p.fecha}"></div>
+                    <div class="campo"><label>Concepto</label><select id="epConc">${conceptos.map(c => `<option ${c === p.concepto ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+                </div>
+                <div class="dos">
+                    <div class="campo"><label>Monto a cobrar</label><input id="epCob" inputmode="decimal" value="${p.cobrada}"></div>
+                    <div class="campo"><label>Pagó</label><input id="epPag" inputmode="decimal" value="${p.pagada}"></div>
+                </div>
+                <button class="btn-main btn-verde" onclick="guardarEdicionPago(${i})">💾 Guardar cambios</button>
+                <button class="btn-main btn-gris" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn-rojo-txt" onclick="borrarPagoUI(${i})">Borrar este pago</button>`;
+            $('modal').classList.add('show');
+        }
+        async function guardarEdicionPago(i) {
+            const p = PAG_LISTA[i], pago = { fecha: $('epFecha').value, concepto: $('epConc').value, cobrada: aNum($('epCob').value) || 0, pagada: aNum($('epPag').value) || 0 };
+            if (!pago.fecha) return alert('Elige la fecha.');
+            if (!pago.cobrada && !pago.pagada) return alert('Pon un monto.');
+            if (!(await enviar({ accion: 'editarPago', fila: p.fila, id: p.id, pago }))) return;
+            cerrarModal(); toast('✅ Pago actualizado'); render();
+        }
+        async function borrarPagoUI(i) {
+            const p = PAG_LISTA[i];
+            if (!confirm(`¿Borrar este pago?\n\n${nombrePago(p)}\n${p.concepto} · ${dinero(p.pagada)} (${fFecha(p.fecha)})\n\nSe borra de Google Sheets.`)) return;
+            if (!(await enviar({ accion: 'borrarPago', fila: p.fila, id: p.id, pagada: p.pagada }))) return;
+            cerrarModal(); toast('Pago borrado'); render();
+        }
+
         function vistaGastos() {
             if (!GAS_MES) GAS_MES = hoy().slice(0, 7);
             header('💸 Gastos', false, '');
