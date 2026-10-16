@@ -56,6 +56,17 @@
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
         .card { background: var(--card); border-radius: 20px; padding: 18px 10px; text-align: center; box-shadow: var(--shadow); cursor: pointer; transition: 0.15s; }
         .card-g { border-top: 5px solid var(--gc, #c3c9ce); }
+        /* Grupos: todos los recuadros son cuadrados del mismo tamaño, sin importar cuántos grupos haya */
+        #gruposGrid .card { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; overflow: hidden; padding: 12px 10px; }
+        #gruposGrid .card .nombre { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        body:not(.desk) #gruposGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        body:not(.desk) #gruposGrid .card { padding: 8px; }
+        body:not(.desk) #gruposGrid .icono-g { width: 46px; height: 46px; font-size: 1.5rem; margin-bottom: 6px; }
+        body:not(.desk) #gruposGrid .card .nombre { -webkit-line-clamp: 3; font-size: 0.98rem; line-height: 1.2; }
+        body:not(.desk) #gruposGrid .card .sub { font-size: 0.8rem; }
+        .mae-hist { max-height: 340px; overflow: auto; }
+        .mae-hist tbody td { height: 50px; box-sizing: border-box; vertical-align: middle; }
+        .mae-hist thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 1; }
         .icono-g { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.9rem; margin: 0 auto 10px; background: var(--gt, #eef1f3); }
         .iconos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 12px; }
         .ico-op { aspect-ratio: 1; border: 2px solid #e3e6e8; background: #fff; border-radius: 12px; font-size: 1.4rem; cursor: pointer; padding: 0; }
@@ -337,6 +348,9 @@
         .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
         .tab { border: 1px solid #dfe3e6; background: #fff; border-radius: 20px; padding: 8px 14px; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; color: var(--text); }
         .tab.sel { background: var(--text); color: #fff; border-color: var(--text); }
+        .tabs-maestras { flex-wrap: wrap; margin: 0 0 14px; }
+        .tabs-maestras .tab { white-space: nowrap; }
+        @media (max-width: 700px) { .tabs-maestras { gap: 6px; } .tabs-maestras .tab { padding: 7px 11px; font-size: 0.8rem; } }
         .tabla { width: 100%; border-collapse: collapse; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); font-size: 0.88rem; }
         .tabla th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-light); padding: 11px 12px; background: #fafbfb; border-bottom: 1px solid #eef0f2; white-space: nowrap; user-select: none; }
         .tabla th.ord { cursor: pointer; }
@@ -430,7 +444,7 @@
         .met .met-total { border-top: 2px solid var(--text); border-bottom: none; margin-top: 4px; padding-top: 8px; font-size: 1.05rem; }
         .met .met-total b { text-decoration: underline; text-underline-offset: 4px; }
         /* Grupos: 4 columnas que llenan la pantalla */
-        body.desk main.lleno #gruposGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(150px, 1fr); overflow: auto; padding: 4px; margin: -4px -4px 0; }
+        body.desk main.lleno #gruposGrid { grid-template-columns: repeat(auto-fill, 210px); grid-auto-rows: 210px; justify-content: start; align-content: start; overflow: auto; padding: 4px; margin: -4px -4px 0; }
         body.desk main.lleno #gruposGrid .card { display: flex; flex-direction: column; align-items: center; justify-content: center; }
         body.desk main.lleno #resultados { flex: 0 1 auto; overflow: auto; }
         /* Tienda y Gastos: columnas del mismo alto, la tabla hace scroll por dentro */
@@ -498,6 +512,14 @@
         .act-det { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
         body.desk .act-det .act-ins { flex: 1; min-height: 0; display: flex; flex-direction: column; }
         body.desk .act-det .act-ins .tabla-caja { flex: 1; min-height: 0; overflow: auto; }
+        /* Tamaños fijos (iguales en todas las actividades): Niños inscritos grande, Gastos chico; cada uno con su propio scroll */
+        .act-tit .grow { min-width: 0; }
+        .act-notas { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        body.desk .act-det .act-head { flex: 0 0 auto; height: 196px; overflow: hidden; }
+        body.desk .act-det .act-gas { flex: 0 0 auto; height: 170px; display: flex; flex-direction: column; }
+        .act-gas-lista { flex: 1; min-height: 0; overflow-y: auto; }
+        body:not(.desk) .act-ins-lista { height: 52vh; overflow-y: auto; }
+        body:not(.desk) .act-gas-lista { height: 150px; }
         .act-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; cursor: pointer; background: var(--card); border: 2px solid transparent; }
         .act-lista .act-card { box-shadow: var(--shadow); margin-bottom: 10px; }
         .act-card:hover { background: #f7f9f8; }
@@ -947,8 +969,10 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 <div id="resultados"></div>
                 ${esAdmin() && !DESK && DATA.actividades ? `<div class="dos" style="margin-bottom:16px"><button class="btn-tienda" style="margin:0" onclick="ir('#/actividades')"><span>🎉</span> Actividades</button><button class="btn-tienda" style="margin:0" onclick="ir('#/playeras')"><span>👕</span> Playeras</button></div>` : ''}
                 ${DATA.tienda && !DESK ? `<button class="btn-tienda" onclick="ir('#/vender')"><span>🛍️</span> Tienda${pendTienda().length ? ` <small>· ${pendTienda().length} por enviar</small>` : ''}<span class="chev" style="margin-left:auto">›</span></button>` : ''}
+                ${tabsMaestras(grupos)}
                 <div id="gruposGrid" class="grid">${grupos.map((g, i) => {
-                const n = alumnosDe(g).length, u = ultimaClase(g);
+                if (!enTabMaestra(g)) return '';
+                const n = alumnosEnTab(g).length, u = ultimaClase(g);
                 const vis = visualGrupo(g);
                 return `<div class="card card-g" style="${estiloGrupo(vis)}" onclick="ir('#/g/' + encodeURIComponent(LISTA[${i}]))">
                     <div class="icono-g">${vis.icono}</div>
@@ -960,6 +984,52 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 ${esAdmin() && !DESK && (DATA.bajas || []).length ? `<p class="ayuda" style="margin-top:24px"><span class="link-pin" onclick="ir('#/bajas')">Alumnos dados de baja (${DATA.bajas.length})</span></p>` : ''}
                 ${DESK ? '' : `<p class="ayuda" style="margin-top:${esAdmin() && (DATA.bajas || []).length ? '8' : '24'}px">${esAdmin() ? '🔑 Administrador' : '👩‍🏫 Maestra'} · <span class="link-pin" onclick="cambiarPin()">Cambiar PIN</span>${esAdmin() && pantallaAncha() ? ' · <span class="link-pin" onclick="usarModo(\'pc\')">🖥️ Versión computadora</span>' : ''}</p>`}`);
         }
+
+        // ---- Pestañas por maestra en Grupos (la elegida se recuerda en cada celular) ----
+        let TAB_M = lsGet('tab_maestra') || '';
+        const SIN_M = '__sin__';
+        let TABS_M = [];
+        // Pestaña de cada grupo: su maestra. Si es "Sin pago" (lo da la dueña, ej. Miss Sofi) o no tiene,
+        // se toma el nombre que viene en el grupo ("Kids 4:30pm Miss Sofi" → Miss Sofi).
+        function tabDe(g) {
+            const m = maestraDe(g);
+            if (m && m !== 'Sin pago') return m;
+            const x = String(g).match(/\b(Miss|Teacher|Mr\.?|Ms\.?|Mrs\.?)\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]*/i);
+            return x ? x[0].replace(/^\w/, c => c.toUpperCase()) : '';
+        }
+        // Alumno de clase particular: su propia maestra (columna Maestra); si no tiene, la del grupo
+        function tabAlumno(a) {
+            const m = (a.maestra || '').trim();
+            if (m && m !== 'Sin pago') return m;
+            return tabDe(a.grupo);
+        }
+        // Pestañas en las que aparece un grupo (los particulares, en la de cada maestra que tenga alumnos ahí)
+        function tabsDeGrupo(g) {
+            if (!esIndividual(g)) return [tabDe(g)];
+            const al = alumnosDe(g);
+            return al.length ? [...new Set(al.map(tabAlumno))] : [tabDe(g)];
+        }
+        function maestrasDeGrupos(grupos) {
+            const todas = grupos.flatMap(tabsDeGrupo);
+            const ms = [...new Set(todas.filter(Boolean))].sort(comparar);
+            return { ms, sinMaestra: todas.some(t => !t) };
+        }
+        const coincideTab = t => TAB_M === SIN_M ? !t : t === TAB_M;
+        function enTabMaestra(g) {
+            if (!TAB_M) return true;
+            return tabsDeGrupo(g).some(coincideTab);
+        }
+        // En un grupo particular con una pestaña elegida, solo se cuentan / muestran los alumnos de esa maestra
+        const alumnosEnTab = g => (TAB_M && esIndividual(g)) ? alumnosDe(g).filter(a => coincideTab(tabAlumno(a))) : alumnosDe(g);
+        function tabsMaestras(grupos) {
+            const { ms, sinMaestra } = maestrasDeGrupos(grupos);
+            if (!ms.length) return '';
+            if (TAB_M && TAB_M !== SIN_M && !ms.includes(TAB_M)) TAB_M = '';
+            TABS_M = ['', ...ms, SIN_M];
+            const t = (v, txt) => `<button class="tab ${TAB_M === v ? 'sel' : ''}" onclick="elegirTabMaestra(TABS_M[${TABS_M.indexOf(v)}])">${txt}</button>`;
+            return `<div class="tabs tabs-maestras">${t('', 'Todas')}${ms.map(m => t(m, '👩‍🏫 ' + esc(m))).join('')}${sinMaestra ? t(SIN_M, 'Sin maestra') : ''}</div>`;
+        }
+        function elegirTabMaestra(v) { TAB_M = v; lsSet('tab_maestra', v || null); render(); }
 
         function cambiarPin() {
             if (!confirm('¿Salir y entrar con otro PIN?')) return;
@@ -990,8 +1060,9 @@ En el concepto escriba el nombre del alumno, por favor.`;
 
         // ---------- VISTA: grupo ----------
         function vistaGrupo(g) {
+            const filtrado = TAB_M && esIndividual(g) && alumnosEnTab(g).length !== alumnosDe(g).length;
             header('', true, `${esAdmin() ? `<button class="btn-mini" onclick="ir('#/nuevo/' + encodeURIComponent(ACT.grupo))">➕ Alumno</button><button class="btn-mini" onclick="ir('#/grupo/' + encodeURIComponent(ACT.grupo))">⚙️</button>` : ''}<button class="btn-mini" onclick="cargar()">🔄</button>`);
-            const al = alumnosDe(g);
+            const al = filtrado ? alumnosEnTab(g) : alumnosDe(g);
             LISTA = al.map(a => a.id);
             const cfg = grupoCfg(g);
             const titulo = `<div class="titulo-grupo">${visualGrupo(g).icono} ${esc(g)}</div>`;
@@ -1002,7 +1073,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             main(`${titulo}
                 ${horario ? `<p class="ayuda" style="margin-top:0">🕐 ${esc(horario)}</p>` : ''}
                 ${individual
-                    ? '<p class="ayuda" style="margin-top:0">Cada alumno tiene su propio horario. Toca 📝 para registrar su clase.</p>'
+                    ? `<p class="ayuda" style="margin-top:0">Cada alumno tiene su propio horario. Toca 📝 para registrar su clase.${filtrado ? `<br>Mostrando solo alumnos de <b>${TAB_M === SIN_M ? 'sin maestra' : esc(TAB_M)}</b> · <span class="link-pin" onclick="elegirTabMaestra('')">ver todos</span>` : ''}</p>`
                     : `<button class="btn-main btn-verde" onclick="ir('#/r/' + encodeURIComponent(ACT.grupo))">📝 Registrar clase</button>`}
                 <div class="lista">${al.map((a, i) => {
                     const s = stats(a.id);
@@ -1578,8 +1649,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const v = a ? {
                 nombre: a.alumno, cumple: a.cumple, alergia: a.alergia, padre: a.padre, telefono: a.telefono,
                 grupo: a.grupo === 'Sin grupo' ? '' : a.grupo, libro: a.libro, horario: a.horario, inicio: a.inicio || '',
-                dia: a.dia, mensualidad: (a.precios || {})['Mensualidad'] || '', inscripcion: (a.precios || {})['Inscripción'] ?? '', material: (a.precios || {})['Material'] ?? ''
-            } : { nombre: '', cumple: '', alergia: 'No', padre: '', telefono: '', grupo: grupoPre, libro: '', horario: '', inicio: hoy(), dia: '', mensualidad: '', inscripcion: '', material: '' };
+                dia: a.dia, mensualidad: (a.precios || {})['Mensualidad'] || '', inscripcion: (a.precios || {})['Inscripción'] ?? '', material: (a.precios || {})['Material'] ?? '', maestra: a.maestra || ''
+            } : { nombre: '', cumple: '', alergia: 'No', padre: '', telefono: '', grupo: grupoPre, libro: '', horario: '', inicio: hoy(), dia: '', mensualidad: '', inscripcion: '', material: '', maestra: '' };
             const campo = (k, label, tipo = 'text', req = false, extra = '') => `
                 <div class="campo" id="c_${k}"><label>${label}${req ? ' <span class="req">*</span>' : ''}</label>
                 <input id="f_${k}" type="${tipo}" value="${esc(v[k] ?? '')}" ${extra}></div>`;
@@ -1603,12 +1674,14 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     <div class="dos">
                         <div class="campo"><label>Libro</label>
                             <select id="f_libro"><option value="">—</option>${libros.map(l => `<option ${l === v.libro ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-                        ${campo('inicio', 'Fecha de inicio', 'date', true, 'onchange="autoDia()"')}
+                        ${campo('inicio', 'Primer día de clases', 'date', true, 'onchange="autoDia()"')}
                     </div>
                     <div class="campo" id="c_horario"><label>Horario</label>
                         <div id="horarioFijo" class="horario-fijo"></div>
                         <input id="f_horario" type="text" value="${esc(v.horario)}" placeholder="Ej. Lun y Mié 4:30pm - 6:00pm" style="display:none;margin-top:8px">
                     </div>
+                    <div class="campo" id="c_maestra" style="display:none"><label>Maestra de su clase particular</label>
+                        <select id="f_maestra"><option value="">— Sin asignar —</option>${opcionesMaestra(v.maestra).map(m => `<option ${m === v.maestra ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
                 </div>
                 <div class="form-sec"><h4>💰 Pagos</h4>
                     <div class="dos">
@@ -1629,8 +1702,14 @@ En el concepto escriba el nombre del alumno, por favor.`;
 
         // Horario: lo define el grupo. Solo se escribe si el grupo no tiene horario fijo (ej. Particular)
         let HORARIO_PROPIO = false;
+        // Maestras para elegir: las activas + las que aparecen en los nombres de los grupos (ej. Miss Sofi)
+        function opcionesMaestra(actual) {
+            const gr = (DATA.grupos || []).map(g => g.nombre).concat(DATA.alumnos.map(a => a.grupo));
+            return [...new Set((DATA.maestras || []).filter(m => m.activa).map(m => m.nombre).concat(gr.map(tabDe), actual ? [actual] : []).filter(m => m && m !== 'Sin pago'))].sort(comparar);
+        }
         function mostrarHorario(inicial) {
             const g = $('f_grupo').value, cfg = grupoCfg(g), inp = $('f_horario'), box = $('horarioFijo');
+            if ($('c_maestra')) $('c_maestra').style.display = g && (g === '__particular__' || esIndividual(g)) ? '' : 'none';
             const fijo = cfg && cfg.horario ? cfg.horario : '';
             if (!g) { box.style.display = 'block'; box.innerHTML = '<span class="sub">Elige primero el grupo</span>'; inp.style.display = 'none'; return; }
             if (g === '__particular__') {
@@ -1845,6 +1924,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const val = k => $('f_' + k).value.trim();
             const campos = {};
             ['nombre', 'cumple', 'alergia', 'padre', 'telefono', 'grupo', 'libro', 'horario', 'inicio', 'mensualidad', 'dia', 'inscripcion', 'material'].forEach(k => campos[k] = val(k));
+            campos.maestra = $('c_maestra').style.display === 'none' ? '' : $('f_maestra').value;
             campos.telefono = campos.telefono.replace(/\D/g, '');
             if (campos.telefono.length === 12 && campos.telefono.startsWith('52')) campos.telefono = campos.telefono.slice(2);
             campos.mensualidad = campos.mensualidad.replace(/[$,\s]/g, '');
@@ -2591,6 +2671,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
         function porVencerMes(a) {
             const p = a.pago;
             if (!p || !p.mesPendiente || !p.venceMes || p.venceMes <= hoy()) return null;
+            if (p.inicio && hoy() < p.inicio) return null;   // alumno nuevo que aún no empieza: solo se muestra la inscripción
             return { concepto: 'Mensualidad', mes: hoy().slice(0, 7), monto: p.mensualidad, vence: p.venceMes };
         }
         function estadoPagoHtml(a, conAtraso) {
@@ -2605,12 +2686,11 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 + (pv ? `<div class="pago-linea"><span>Mensualidad ${mesTxt} – ${fDia(pv.vence)}</span><b style="color:#b9770e">${dinero(pv.monto)}</b></div>` : '');
             return { caja: `<div class="pago-estado fijo ${total > 0 ? 'pago-debe' : 'pago-ok'}"><b>${titulo}</b><span>${sub}</span></div>`, lineas: total > 0 ? lineas : '' };
         }
-        // Texto para mensajes: cada cargo (incluida la mensualidad por vencer) y el total
+        // Texto para mensajes de cobro: solo lo que YA está vencido (la mensualidad que aún no vence no se suma)
         function textoPendientes(a) {
-            const p = a.pago, pv = porVencerMes(a);
-            const lineas = p.detalle.map(d => `• ${etiquetaCargo(d)}: ${dinero(d.monto)}`)
-                .concat(pv ? [`• Mensualidad ${fMes(pv.mes)} – ${fDia(pv.vence)}: ${dinero(pv.monto)}`] : []).join('\n');
-            return { lineas, total: p.adeudo + (pv ? pv.monto : 0), pv };
+            const p = a.pago;
+            const lineas = p.detalle.map(d => `• ${etiquetaCargo(d)}: ${dinero(d.monto)}`).join('\n');
+            return { lineas, total: p.adeudo };
         }
         // Gráfica de dona (SVG) con leyenda; cada rebanada muestra su detalle al pasar el mouse
         let DONAS = [];
@@ -2935,7 +3015,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 const cfg = grupoCfg(r.grupo), al = alumno(r.id);
                 const hor = ind ? ((al && al.horario) || '') : ((cfg && cfg.horario) || (al && al.horario) || '');
                 const dur = duracionHorario(hor);
-                out.push({ fecha: r.fecha, grupo: r.grupo, alumno: ind ? r.alumno : '', horas: dur == null ? 1 : dur, estimado: dur == null, maestra: maestraDe(r.grupo) });
+                out.push({ fecha: r.fecha, grupo: r.grupo, alumno: ind ? r.alumno : '', horas: dur == null ? 1 : dur, estimado: dur == null,
+                           maestra: (ind && al && al.maestra) || maestraDe(r.grupo) });
             });
             return out.sort((x, y) => x.fecha < y.fecha ? -1 : x.fecha > y.fecha ? 1 : comparar(x.grupo, y.grupo));
         }
@@ -2951,8 +3032,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
             MAE = maestras.map(m => { const cl = clases.filter(c => c.maestra === m.nombre); return { m, cl, horas: cl.reduce((t, c) => t + c.horas, 0), pago: pagoDe(m.nombre, SEM) }; });
             const sinMaestra = [...new Set(clases.filter(c => !c.maestra).map(c => c.grupo))];
             const totalSemana = MAE.reduce((t, x) => t + (x.pago ? x.pago.monto : x.horas * (x.m.tarifa || 0)), 0);
-            // historial: últimas 8 semanas
-            const semanas = Array.from({ length: 8 }, (_, i) => sumarDias(SEM, -7 * i));
+            // historial: últimas 5 semanas
+            const semanas = Array.from({ length: 5 }, (_, i) => sumarDias(SEM, -7 * i));
             const nombresH = [...new Set(fin().gastos.filter(g => g.categoria === 'Maestras' && semanas.includes(g.semana)).map(g => g.maestra))].sort(comparar);
             MAE_PAGOS = fin().gastos.filter(g => g.categoria === 'Maestras');
             main(`
@@ -2985,10 +3066,10 @@ En el concepto escriba el nombre del alumno, por favor.`;
                             <p class="ayuda" style="text-align:left;margin:0">Calculado con las clases que se registraron. Puedes ajustar las horas si dio clases extra o si faltó registrar alguna.</p>`}
                     </div>`).join('')}</div>
                 ${nombresH.length ? `<div class="res-card" style="margin-top:14px;padding:0;overflow:hidden">
-                    <div class="res-tit" style="padding:14px 16px 0"><b>Pagos de las últimas 8 semanas</b></div>
-                    <table class="tabla" style="box-shadow:none;border-radius:0"><thead><tr><th>Semana</th>${nombresH.map(n => `<th class="num">${esc(n)}</th>`).join('')}<th class="num">Total</th></tr></thead>
+                    <div class="res-tit" style="padding:14px 16px 0"><b>Pagos de las últimas 5 semanas</b></div>
+                    <div class="mae-hist"><table class="tabla" style="box-shadow:none;border-radius:0"><thead><tr><th>Semana</th>${nombresH.map(n => `<th class="num">${esc(n)}</th>`).join('')}<th class="num">Total</th></tr></thead>
                     <tbody>${semanas.map(s2 => { const ps = nombresH.map(n => pagoDe(n, s2)); const t = ps.reduce((a, p) => a + (p ? p.monto : 0), 0);
-                        return `<tr style="cursor:pointer" onclick="SEM = '${s2}'; render()"><td>${rangoSemana(s2)}</td>${ps.map(p => `<td class="num">${p ? `${dinero(p.monto)}<span class="t-sub">${p.horas !== '' ? fmtHoras(p.horas) : ''}</span>` : '—'}</td>`).join('')}<td class="num"><b>${t ? dinero(t) : '—'}</b></td></tr>`; }).join('')}</tbody></table></div>` : ''}`);
+                        return `<tr style="cursor:pointer" onclick="SEM = '${s2}'; render()"><td>${rangoSemana(s2)}</td>${ps.map(p => `<td class="num">${p ? `${dinero(p.monto)}<span class="t-sub">${p.horas !== '' ? fmtHoras(p.horas) : ''}</span>` : '—'}</td>`).join('')}<td class="num"><b>${t ? dinero(t) : '—'}</b></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}`);
         }
 
         async function pagarMaestra(i) {
@@ -3405,12 +3486,12 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const pl = playerasAct(id);
             const playeraDe = i => pl.find(v => v.nombre === i.nino);
             return `
-                <div class="res-card">
+                <div class="res-card act-head">
                     <div class="act-tit">
                         <div class="act-ico grande">${ICO_ACT[a.tipo] || '⭐'}</div>
                         <div class="grow"><div class="pn-nom">${esc(a.nombre)}</div>
                             <div class="sub">${esc(a.tipo)} · ${fechasAct(a)} · ${a.cobro === 'Por día' ? dinero(a.precio) + ' por día' : dinero(a.precio) + ' por niño'}${a.estado === 'Terminada' ? ' · <b>Terminada</b>' : ''}</div>
-                            ${a.notas ? `<div class="sub">${esc(a.notas)}</div>` : ''}</div>
+                            ${a.notas ? `<div class="sub act-notas" title="${esc(a.notas)}">${esc(a.notas)}</div>` : ''}</div>
                         <button class="btn-mini" onclick="formActividad('${esc(a.id)}')">✏️ Editar</button>
                     </div>
                     <div class="kpis act-kpis">
@@ -3423,7 +3504,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 </div>
                 <div class="res-card act-ins">
                     <div class="res-tit"><b>Niños inscritos</b><div class="grow"></div><button class="btn-mini btn-cola" onclick="formInscrito('${esc(a.id)}')">➕ Inscribir niño</button></div>
-                    ${st.ins.length && !DESK ? `<div class="lista" style="margin-top:0;box-shadow:none">${st.ins.map((i, k) => { const p = playeraDe(i), debe = i.total - i.pagado;
+                    ${st.ins.length && !DESK ? `<div class="lista act-ins-lista" style="margin-top:0;box-shadow:none">${st.ins.map((i, k) => { const p = playeraDe(i), debe = i.total - i.pagado;
                         return `<div class="fila" style="cursor:default;padding:12px 4px">
                             <span class="fila-nom">${esc(i.nino)} ${i.idAlumno ? '' : '<span class="chip chip-nuevo">Nuevo</span>'}<br>
                                 <span class="res-grupo">${debe > 0 ? `<b class="rojo">Debe ${dinero(debe)}</b>` : '✅ Pagado'} · ${dinero(i.pagado)} de ${dinero(i.total)}${p ? ` · 👕 ${esc(p.talla)}${p.entregada ? ' ✅' : ' por entregar'}` : ''}</span></span>
@@ -3440,10 +3521,10 @@ En el concepto escriba el nombre del alumno, por favor.`;
                                 <td class="acc">${waNumero(i.telefono) && debe > 0 ? `<button class="b-wa" title="Recordar pago" onclick="recordarAct(${k})">💬</button>` : ''}<button class="b-pago" title="Editar / registrar pago" onclick="formInscrito('${esc(a.id)}', ${k})">✏️</button><button class="b-borrar" title="Quitar" onclick="quitarInscrito(${k})">✕</button></td></tr>`; }).join('')}</tbody></table></div>`
                       : '<div class="vacio" style="padding:30px 10px">Todavía no hay niños inscritos.</div>'}
                 </div>
-                <div class="res-card">
-                    <div class="res-tit"><b>Gastos de la actividad</b><div class="grow"></div><button class="btn-mini" onclick="formGastoAct('${esc(a.id)}')">➕ Gasto</button></div>
-                    ${ACT_GAS.length ? ACT_GAS.map((g, k) => `<div class="pago-linea"><span>${fFecha(g.fecha)} · ${esc(g.concepto)}</span><b>${dinero(g.monto)} <button class="pn-borrar" title="Borrar" onclick="borrarGastoUI(${k}, ACT_GAS)">✕</button></b></div>`).join('')
-                      : '<p class="ayuda" style="text-align:left;margin:0">Sin gastos registrados (material, renta, pago a quien la imparte…).</p>'}
+                <div class="res-card act-gas">
+                    <div class="res-tit"><b>Gastos de la actividad</b>${ACT_GAS.length ? `<span class="sub" style="margin:0 0 0 8px">${ACT_GAS.length} · ${dinero(st.gastos)}</span>` : ''}<div class="grow"></div><button class="btn-mini" onclick="formGastoAct('${esc(a.id)}')">➕ Gasto</button></div>
+                    <div class="act-gas-lista">${ACT_GAS.length ? ACT_GAS.map((g, k) => `<div class="pago-linea"><span>${fFecha(g.fecha)} · ${esc(g.concepto)}</span><b>${dinero(g.monto)} <button class="pn-borrar" title="Borrar" onclick="borrarGastoUI(${k}, ACT_GAS)">✕</button></b></div>`).join('')
+                      : '<p class="ayuda" style="text-align:left;margin:0">Sin gastos registrados (material, renta, pago a quien la imparte…).</p>'}</div>
                 </div>`;
         }
 
@@ -3580,7 +3661,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
             $('modalIn').innerHTML = `
                 <h2>➕ Gasto de ${esc(a.nombre)}</h2>
                 <div class="dos">
-                    <div class="campo"><label>Fecha</label><input id="gaFecha" type="date" value="${hoy()}"></div>
+                    <div class="campo"><label>Fecha</label><input id="gaFecha" type="date" value="${(a.fin || a.inicio) < hoy() ? a.inicio : hoy()}"></div>
                     <div class="campo"><label>Monto</label><input id="gaMonto" inputmode="decimal" placeholder="$0"></div>
                 </div>
                 <div class="campo"><label>Concepto</label><input id="gaConc" type="text" placeholder="Ej. Material, inflable, pago a quien lo imparte"></div>
