@@ -258,6 +258,9 @@
         .btn-reg-ind { background: var(--primary); color: #fff; border: none; border-radius: 12px; width: 44px; height: 40px; font-size: 1.1rem; cursor: pointer; flex-shrink: 0; }
         .link-pin { color: var(--text-light); text-decoration: underline; cursor: pointer; }
         .chip-exam { background: #f3e8f8; color: #7d3c98; font-weight: 700; }
+        .chip-tarea { background: #e8f4fd; color: #1f618d; font-weight: 700; }
+        .tarea-box.on { border-color: #3498db; background: #f2f8fd; }
+        .tarea-row .crit-lbl { color: #1f618d; }
 
         /* ================= VERSIÓN COMPUTADORA (solo administrador, pantalla ancha) ================= */
         .side, .panel { display: none; }
@@ -349,6 +352,8 @@
         .tab { border: 1px solid #dfe3e6; background: #fff; border-radius: 20px; padding: 8px 14px; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; color: var(--text); }
         .tab.sel { background: var(--text); color: #fff; border-color: var(--text); }
         .tabs-maestras { flex-wrap: wrap; margin: 0 0 14px; }
+        .ficha-periodo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+        .ficha-periodo .cal-nav b { min-width: 130px; text-align: center; }
         body.buscando .oculta-busqueda { display: none !important; }
         .tabs-maestras .tab { white-space: nowrap; }
         @media (max-width: 700px) { .tabs-maestras { gap: 6px; } .tabs-maestras .tab { padding: 7px 11px; font-size: 0.8rem; } }
@@ -587,8 +592,11 @@
             { v: 6, emoji: '🟡', txt: 'Regular', pts: 6 },
             { v: 2, emoji: '🔴', txt: 'Necesita apoyo', pts: 2 }
         ];
-        const REFORZAR_BAJO = 6;    // promedio menor a esto -> "Puede mejorar en"
+        const REFORZAR_BAJO = 7;    // promedio menor a esto (de 10) -> "Puede mejorar en"
         const DESTACA_DESDE = 9;    // promedio de esto o más -> "Destaca en"
+        // Peso de cada cosa en el estatus general ("Va excelente / bien / regular / necesita apoyo").
+        // "examenes" = Exámenes y tareas (mitad y mitad si hay de los dos). Si un alumno aún no tiene, se reparte entre lo demás.
+        const PESOS = { asistencia: 0.20, participacion: 0.10, conducta: 0.10, avance: 0.40, examenes: 0.20 };
 
         // Lo que calificas al final de cada clase. Puedes agregar, quitar o renombrar.
         // "key" es el nombre de la columna en la pestaña Fichas (no lo cambies una vez que tengas datos).
@@ -603,6 +611,14 @@
             { key: 'conducta', nombre: 'Conducta', corto: 'Cond.', def: 10, opciones: NIVELES },
             { key: 'avance', nombre: 'Avance', corto: 'Avance', def: 10, opciones: NIVELES }
         ];
+
+        // Tareas: sin calificación, solo si la hizo. Cuentan junto con los exámenes en "Exámenes y tareas".
+        const TAREA_OPC = [
+            { v: 'Hizo', emoji: '✅', txt: 'La hizo', pts: 10 },
+            { v: 'Incompleta', emoji: '🟡', txt: 'Incompleta', pts: 6 },
+            { v: 'No hizo', emoji: '❌', txt: 'No la hizo', pts: 2 }
+        ];
+        const tareaOpc = v => TAREA_OPC.find(o => o.v === v) || null;
 
         // Exámenes: se califica de 0 a EXAMEN_MAX (pon 100 si calificas sobre 100)
         const EXAMEN_MAX = 100;
@@ -729,11 +745,34 @@ En el concepto escriba el nombre del alumno, por favor.`;
             return { color: '#e74c3c', emoji: '🔴', txt: 'Necesita apoyo', corto: 'Necesita apoyo' };
         }
 
-        function stats(id) {
-            const regs = DATA.registros.filter(r => r.id === id).sort((x, y) => x.fecha < y.fecha ? 1 : -1);
+        // Estatus general: toma en cuenta TODO (asistencia con retardos y faltas, participación, conducta,
+        // avance y exámenes). Además, no puede decir "Va excelente" si algo va flojo:
+        //  - si algo está debajo de "Bien" (7.5), lo más alto es "Va bien"
+        //  - si algo está en "Necesita apoyo" (menos de 5), lo más alto es "Va regular"
+        function calcGeneral(crit, examProm, tareaProm) {
+            const partes = CRITERIOS.filter(c => crit[c.key] != null).map(c => ({ v: crit[c.key], p: PESOS[c.key] ?? 0.15 }));
+            const et = promedio([examProm != null ? examProm / EXAMEN_MAX * 10 : null, tareaProm].filter(v => v != null));
+            if (et != null) partes.push({ v: et, p: PESOS.examenes });
+            if (!partes.length) return null;
+            let g = partes.reduce((t, x) => t + x.v * x.p, 0) / partes.reduce((t, x) => t + x.p, 0);
+            const minimo = Math.min(...partes.map(x => x.v));
+            if (minimo < 7.5) g = Math.min(g, 8.9);
+            if (minimo < 5) g = Math.min(g, 7.4);
+            return g;
+        }
+        // Qué destaca y qué puede mejorar (incluye asistencia y exámenes)
+        function puntosClave(s) {
+            const lista = CRITERIOS.filter(c => s.crit[c.key] != null).map(c => [c.nombre, s.crit[c.key]]);
+            if (s.examProm != null) lista.push(['Exámenes', s.examProm / EXAMEN_MAX * 10]);
+            if (s.tareaProm != null) lista.push(['Tareas', s.tareaProm]);
+            return { destaca: lista.filter(x => x[1] >= DESTACA_DESDE).map(x => x[0]), reforzar: lista.filter(x => x[1] < REFORZAR_BAJO).map(x => x[0]) };
+        }
+
+        // mes ('2026-10'): solo las clases de ese mes (para el reporte mensual a los papás)
+        function stats(id, mes) {
+            const regs = DATA.registros.filter(r => r.id === id && (!mes || r.fecha.slice(0, 7) === mes)).sort((x, y) => x.fecha < y.fecha ? 1 : -1);
             const crit = {};
             CRITERIOS.forEach(c => crit[c.key] = promedio(regs.map(r => opcion(c, r[c.key])).filter(Boolean).map(o => o.pts)));
-            const general = promedio(Object.values(crit).filter(v => v != null));
             let faltas = 0, retardos = 0;
             regs.forEach(r => CRITERIOS.forEach(c => {
                 const o = opcion(c, r[c.key]);
@@ -753,7 +792,11 @@ En el concepto escriba el nombre del alumno, por favor.`;
             const calificados = examenes.filter(r => r.calif != null);
             const pendientes = examenes.filter(r => r.calif == null && !r.np);
             const examProm = promedio(calificados.map(r => r.calif));
-            return { regs, crit, general, faltas, retardos, asistPct, tendencia, examenes, calificados, pendientes, examProm };
+            const tareas = regs.filter(r => tareaOpc(r.tarea));
+            const tareaProm = promedio(tareas.map(r => tareaOpc(r.tarea).pts));
+            const tCuenta = { hizo: tareas.filter(r => r.tarea === 'Hizo').length, inc: tareas.filter(r => r.tarea === 'Incompleta').length, no: tareas.filter(r => r.tarea === 'No hizo').length };
+            const general = calcGeneral(crit, examProm, tareaProm);
+            return { regs, crit, general, faltas, retardos, asistPct, tendencia, examenes, calificados, pendientes, examProm, tareas, tareaProm, tCuenta };
         }
 
         const alumno = id => DATA.alumnos.find(a => a.id === id);
@@ -794,6 +837,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     o.examen = String(r['Examen'] ?? '').trim();
                     o.calif = numCalif(r['Calificación']);
                     o.np = esNP(r['Calificación']);
+                    o.tarea = String(r['Tarea'] ?? '').trim();
                     return o;
                 })
             };
@@ -1118,10 +1162,12 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 if (ex) existe = true;
                 const valores = {};
                 CRITERIOS.forEach(c => valores[c.key] = ex && ex[c.key] != null ? ex[c.key] : c.def);
-                return { id: a.id, alumno: a.alumno, valores, nota: ex ? ex.nota : '', calif: ex ? (ex.calif != null ? String(ex.calif) : ex.np ? 'NP' : '') : '' };
+                return { id: a.id, alumno: a.alumno, valores, nota: ex ? ex.nota : '', calif: ex ? (ex.calif != null ? String(ex.calif) : ex.np ? 'NP' : '') : '',
+                         tarea: ex && tareaOpc(ex.tarea) ? ex.tarea : 'Hizo' };
             });
             const exPrevio = DATA.registros.find(r => (id ? r.id === id : r.grupo === g) && r.fecha === fecha && (r.calif != null || r.examen));
-            REG = { grupo: g, id, fecha, existe, filas, examen: { on: !!exPrevio, nombre: exPrevio ? exPrevio.examen : '' } };
+            const taPrevia = DATA.registros.some(r => (id ? r.id === id : r.grupo === g) && r.fecha === fecha && tareaOpc(r.tarea));
+            REG = { grupo: g, id, fecha, existe, filas, examen: { on: !!exPrevio, nombre: exPrevio ? exPrevio.examen : '' }, tarea: { on: taPrevia } };
         }
 
         function vistaRegistrar(g, id) {
@@ -1145,6 +1191,13 @@ En el concepto escriba el nombre del alumno, por favor.`;
                         <input class="nota" placeholder="Nombre del examen (ej. Unit 3, Mid-term)" value="${esc(REG.examen.nombre)}" oninput="REG.examen.nombre = this.value">
                         <div class="sub" style="margin-top:8px">Calificación de 0 a ${EXAMEN_MAX}. Vacía = <b>pendiente</b> (lo presentará después). Escribe <b>NP</b> si definitivamente no lo presentará.</div>` : ''}
                 </div>
+                <div class="exam-box tarea-box ${REG.tarea.on ? 'on' : ''}">
+                    <label class="switch-row">
+                        <span>📚 ¿Hubo tarea esta clase?</span>
+                        <input type="checkbox" class="switch" ${REG.tarea.on ? 'checked' : ''} onchange="REG.tarea.on = this.checked; render()">
+                    </label>
+                    ${REG.tarea.on ? '<div class="sub" style="margin-top:8px">Todos vienen en ✅ (la hizo). Marca 🟡 si la entregó incompleta o ❌ si no la hizo.</div>' : ''}
+                </div>
                 ${REG.filas.map((f, i) => tarjetaReg(i)).join('')}`);
             footer(`<button class="btn-main btn-verde" onclick="guardarClase()">GUARDAR CLASE${REG.id ? '' : ` (${REG.filas.length})`}</button>`);
         }
@@ -1167,6 +1220,11 @@ En el concepto escriba el nombre del alumno, por favor.`;
                             <input class="calif" type="text" inputmode="decimal" placeholder="${falto ? 'Pend.' : '—'}" value="${esc(f.calif)}" oninput="REG.filas[${i}].calif = this.value">
                             <span>/ ${EXAMEN_MAX}</span>
                         </div>
+                    </div>` : ''}
+                ${REG.tarea.on ? `
+                    <div class="crit tarea-row ${falto ? 'off' : ''}">
+                        <span class="crit-lbl">📚 Tarea</span>
+                        <div class="opts">${TAREA_OPC.map(o => `<button class="opt ${f.tarea === o.v ? 'sel' : ''}" title="${esc(o.txt)}" onclick="REG.filas[${i}].tarea = '${o.v}'; $('rc${i}').outerHTML = tarjetaReg(${i})">${o.emoji}</button>`).join('')}</div>
                     </div>` : ''}
                 <input class="nota" placeholder="📝 Nota (opcional)" value="${esc(f.nota)}" oninput="REG.filas[${i}].nota = this.value">
             </div>`;
@@ -1194,6 +1252,8 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 const cal = ex.on ? numCalif(f.calif) : null;
                 valores['Examen'] = ex.on ? (ex.nombre.trim() || 'Examen') : '';
                 valores['Calificación'] = !ex.on ? '' : esNP(f.calif) ? 'NP' : cal == null ? '' : cal;
+                if (REG.tarea.on || DATA.registros.some(r => r.id === f.id && r.fecha === REG.fecha && r.tarea))
+                    valores['Tarea'] = REG.tarea.on && !falto ? f.tarea : '';
                 return { id: f.id, alumno: f.alumno, valores, nota: (f.nota || '').trim() };
             });
             const ok = await enviar({ accion: 'guardarClase', fecha: REG.fecha, grupo: REG.grupo, registros });
@@ -1201,16 +1261,14 @@ En el concepto escriba el nombre del alumno, por favor.`;
         }
 
         // ---------- VISTA: ficha del alumno ----------
+        let FICHA_MES = '';   // '' = vista general (todas las clases); '2026-10' = solo ese mes
         function vistaAlumno(id) {
             const a = alumno(id);
             if (!a) { header('Alumno', true); return main('<div class="vacio">No encontré a este alumno (¿está inactivo?).</div>'); }
-            header(a.alumno, true, esAdmin() ? `<button class="btn-mini btn-papas" onclick="abrirCompartir(ruta()[1])">📲 Papás</button>` : '');
-            const s = stats(id), sem = semaforo(s.general);
+            header(a.alumno, true, esAdmin() ? `<button class="btn-mini btn-papas" onclick="abrirCompartir(ruta()[1], FICHA_MES || '')">📲 Papás</button>` : '');
+            const s = stats(id, FICHA_MES || undefined), sem = semaforo(s.general);
             const desempeno = CRITERIOS.filter(c => !esAsis(c));
-            const reforzar = desempeno.filter(c => s.crit[c.key] != null && s.crit[c.key] < REFORZAR_BAJO).map(c => c.nombre);
-            const destaca = desempeno.filter(c => s.crit[c.key] != null && s.crit[c.key] >= DESTACA_DESDE).map(c => c.nombre);
-            if (s.examProm != null && s.examProm / EXAMEN_MAX < 0.6) reforzar.push('Exámenes');
-            if (s.examProm != null && s.examProm / EXAMEN_MAX >= 0.9) destaca.push('Exámenes');
+            const { reforzar, destaca } = puntosClave(s);
             const detalle = [
                 reforzar.length ? '🎯 Reforzar: ' + reforzar.join(', ') : '',
                 destaca.length ? '⭐ Destaca en: ' + destaca.join(', ') : '',
@@ -1233,6 +1291,12 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     ${esIndividual(a.grupo) && a.horario ? `<div class="sub">🕐 ${esc(a.horario)}</div>` : ''}
                 </div>
                 ${esIndividual(a.grupo) ? `<button class="btn-main btn-verde" style="margin-bottom:14px" onclick="ir('#/r/' + encodeURIComponent(alumno(ruta()[1]).grupo) + '/' + encodeURIComponent(ruta()[1]))">📝 Registrar clase</button>` : ''}
+
+                <div class="ficha-periodo">
+                    <div class="tabs"><button class="tab ${FICHA_MES ? '' : 'sel'}" onclick="FICHA_MES = ''; render()">General</button><button class="tab ${FICHA_MES ? 'sel' : ''}" onclick="FICHA_MES = FICHA_MES || hoy().slice(0, 7); render()">Por mes</button></div>
+                    ${FICHA_MES ? `<div class="cal-nav"><button class="flecha" onclick="FICHA_MES = mesMas(FICHA_MES, -1); render()" title="Mes anterior">‹</button><b>${cap(MESES[Number(FICHA_MES.slice(5, 7)) - 1])} ${FICHA_MES.slice(0, 4)}</b><button class="flecha" ${FICHA_MES < hoy().slice(0, 7) ? '' : 'disabled style="opacity:.3"'} onclick="FICHA_MES = mesMas(FICHA_MES, 1); render()" title="Mes siguiente">›</button></div>` : ''}
+                </div>
+                ${FICHA_MES && !s.regs.length ? '<div class="aviso" style="margin:0 0 14px">No hay clases registradas en este mes.</div>' : ''}
 
                 <div class="sem-card" style="--c:${sem.color}">
                     <div class="sem-emoji">${sem.emoji}</div>
@@ -1270,6 +1334,15 @@ En el concepto escriba el nombre del alumno, por favor.`;
                             </div>`).join('')}
                     </div>` : ''}
 
+                ${s.tareas.length ? `
+                    <h3>Tareas</h3>
+                    <div class="barras">
+                        <div class="exam-prom">
+                            <b style="color:${semaforo(s.tareaProm).color}">${s.tCuenta.hizo} <small style="font-size:1rem;color:var(--text-light)">de ${s.tareas.length}</small></b>
+                            <span>tareas hechas${s.tCuenta.inc ? ` · 🟡 ${s.tCuenta.inc} incompleta${s.tCuenta.inc === 1 ? '' : 's'}` : ''}${s.tCuenta.no ? ` · ❌ ${s.tCuenta.no} sin hacer` : ''}</span>
+                        </div>
+                    </div>` : ''}
+
                 ${esAdmin() && a.pago ? seccionPagos(a) : ''}
 
                 <h3>Historial de clases</h3>
@@ -1280,7 +1353,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
                             <span class="chips">${CRITERIOS.map(c => {
                                 const o = opcion(c, r[c.key]);
                                 return o ? `<span class="chip">${esc(c.corto)} ${o.emoji}</span>` : '';
-                            }).join('')}${(r.examen || r.calif != null) ? `<span class="chip chip-exam" title="${esc(r.examen)}">📝 ${r.calif != null ? fmtCalif(r.calif) : r.np ? 'NP' : '⏳'}</span>` : ''}</span>
+                            }).join('')}${(r.examen || r.calif != null) ? `<span class="chip chip-exam" title="${esc(r.examen)}">📝 ${r.calif != null ? fmtCalif(r.calif) : r.np ? 'NP' : '⏳'}</span>` : ''}${tareaOpc(r.tarea) ? `<span class="chip chip-tarea" title="Tarea: ${esc(tareaOpc(r.tarea).txt)}">📚 ${tareaOpc(r.tarea).emoji}</span>` : ''}</span>
                         </div>
                         ${r.nota ? `<div class="hist-n">${esc(r.nota)}</div>` : ''}
                     </div>`).join('') : '<div class="vacio">Sin clases registradas todavía.</div>'}
@@ -1308,23 +1381,21 @@ En el concepto escriba el nombre del alumno, por favor.`;
             ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
         }
 
-        // Imagen del reporte en formato vertical 3:4 (1080 × 1440), con el contenido lo más grande posible
-        function generarImagen(a) {
-            const ANCHO = 1080, ALTO = 1440;
-            const s = stats(a.id), sem = semaforo(s.general);
+        // Reporte MENSUAL para los papás: imagen vertical (1080 de ancho; 3:4, o más alta si hay muchos comentarios)
+        function generarImagen(a, mes) {
+            const ANCHO = 1080, ALTO = 1440, ALTO_MAX = 1920;
+            const s = stats(a.id, mes), sem = semaforo(s.general);
             const F = '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-            const fecha = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+            const nomMes = cap(MESES[Number(mes.slice(5, 7)) - 1]) + ' ' + mes.slice(0, 4);
+            const fecha = 'Mes de ' + nomMes.toLowerCase().replace(/ (\d{4})$/, ' de $1');
             const desemp = CRITERIOS.filter(cr => !esAsis(cr));
-            const refz = desemp.filter(cr => s.crit[cr.key] != null && s.crit[cr.key] < REFORZAR_BAJO).map(cr => cr.nombre);
-            const dest = desemp.filter(cr => s.crit[cr.key] != null && s.crit[cr.key] >= DESTACA_DESDE).map(cr => cr.nombre);
-            if (s.examProm != null && s.examProm / EXAMEN_MAX < 0.6) refz.push('Exámenes');
-            if (s.examProm != null && s.examProm / EXAMEN_MAX >= 0.9) dest.push('Exámenes');
+            const { destaca: dest, reforzar: refz } = puntosClave(s);
             const det = [];
             if (dest.length) det.push('Destaca en: ' + dest.join(', '));
             if (refz.length) det.push('Puede mejorar en: ' + refz.join(', '));
-            // Comentarios: las 3 notas más recientes
-            const notas = s.regs.filter(r => (r.nota || '').trim()).slice(0, 3);
-            const pie = `${ESCUELA} · Basado en ${s.regs.length} clase${s.regs.length === 1 ? '' : 's'} registrada${s.regs.length === 1 ? '' : 's'}`;
+            // Comentarios: TODOS los del mes (del más reciente al más antiguo)
+            const notas = s.regs.filter(r => (r.nota || '').trim());
+            const pie = `${ESCUELA} · ${nomMes} · ${s.regs.length} clase${s.regs.length === 1 ? '' : 's'} registrada${s.regs.length === 1 ? '' : 's'}`;
 
             // Dibuja todo con ancho W. "gap" es el espacio extra entre secciones. Regresa la altura usada.
             function pintar(c, W, H, gap) {
@@ -1338,11 +1409,11 @@ En el concepto escriba el nombre del alumno, por favor.`;
                     caja(c, M, 24, 170, 142, 24, '#fff');
                     const lw = 148, lh = Math.round(IMG_LOGO.naturalHeight * lw / IMG_LOGO.naturalWidth);
                     c.drawImage(IMG_LOGO, M + 11, 24 + (142 - lh) / 2, lw, lh);
-                    c.fillStyle = '#1f3a5f'; font(800, 46); c.fillText('Reporte de avance', M + 196, 96);
-                    c.fillStyle = '#3d5a80'; font(500, 28); c.fillText(fecha, M + 196, 140);
+                    c.fillStyle = '#1f3a5f'; font(800, 46); c.fillText('Reporte mensual', M + 196, 96);
+                    c.fillStyle = '#3d5a80'; font(600, 30); c.fillText(fecha, M + 196, 140);
                 } else {
-                    c.fillStyle = '#1f3a5f'; font(800, 46); c.fillText('Reporte de avance', M, 96);
-                    c.fillStyle = '#3d5a80'; font(500, 28); c.fillText(fecha, M, 140);
+                    c.fillStyle = '#1f3a5f'; font(800, 46); c.fillText('Reporte mensual', M, 96);
+                    c.fillStyle = '#3d5a80'; font(600, 30); c.fillText(fecha, M, 140);
                 }
 
                 // Nombre
@@ -1366,22 +1437,26 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 c.fillStyle = '#5d6d7e'; font(500, 29); detL.forEach(l => { c.fillText(l, M + 180, ty + 31); ty += 40; });
                 y += hSem + 24 + gap;
 
-                // Asistencia + exámenes
-                const bw = (W - 2 * M - 24) / 2;
+                // Asistencia y exámenes. Las faltas y retardos van discretos (texto chico y gris, sin rojo)
+                const nT = s.tareas.length ? 3 : 2, bw = (W - 2 * M - 24 * (nT - 1)) / nT, bh = 196;
+                const fr = [s.faltas ? `${s.faltas} falta${s.faltas === 1 ? '' : 's'}` : '', s.retardos ? `${s.retardos} retardo${s.retardos === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
                 const tiles = [
-                    [s.asistPct == null ? '—' : s.asistPct + '%', 'Asistencia', s.faltas ? `${s.faltas} falta${s.faltas === 1 ? '' : 's'}` : (s.regs.length ? 'Sin faltas' : ''), '#2c3e50'],
+                    [s.asistPct == null ? '—' : s.asistPct + '%', 'Asistencia', s.regs.length ? (fr || 'Sin faltas ni retardos') : '', '#2c3e50'],
                     s.examProm != null
                         ? [fmtCalif(s.examProm), `Exámenes (/${EXAMEN_MAX})`, s.pendientes.length ? `${s.pendientes.length} pendiente${s.pendientes.length === 1 ? '' : 's'}` : `${s.calificados.length} examen${s.calificados.length === 1 ? '' : 'es'}`, colorCalif(s.examProm)]
-                        : [String(s.regs.length), 'Clases', s.pendientes.length ? `${s.pendientes.length} examen pendiente` : 'registradas', '#2c3e50']
+                        : ['—', 'Exámenes', s.pendientes.length ? `${s.pendientes.length} pendiente${s.pendientes.length === 1 ? '' : 's'}` : 'Sin examen este mes', '#95a5a6']
                 ];
+                if (s.tareas.length) tiles.push([`${s.tCuenta.hizo}/${s.tareas.length}`, 'Tareas hechas',
+                    [s.tCuenta.inc ? `${s.tCuenta.inc} incompleta${s.tCuenta.inc === 1 ? '' : 's'}` : '', s.tCuenta.no ? `${s.tCuenta.no} sin hacer` : ''].filter(Boolean).join(' · ') || '¡Todas!', semaforo(s.tareaProm).color]);
                 tiles.forEach((t, i) => {
                     const x = M + i * (bw + 24);
-                    caja(c, x, y, bw, 196, 26, '#fff');
-                    c.textAlign = 'center'; c.fillStyle = t[3]; font(900, 70); c.fillText(t[0], x + bw / 2, y + 90);
+                    caja(c, x, y, bw, bh, 26, '#fff');
+                    c.textAlign = 'center'; c.fillStyle = t[3]; font(900, nT === 3 ? 62 : 70); c.fillText(t[0], x + bw / 2, y + 90);
                     c.fillStyle = '#7f8c8d'; font(600, 27); c.fillText(t[1], x + bw / 2, y + 136);
-                    c.fillStyle = '#95a5a6'; font(500, 25); c.fillText(t[2], x + bw / 2, y + 172); c.textAlign = 'left';
+                    if (t[2]) { c.fillStyle = '#a3afb7'; font(500, 23); c.fillText(t[2], x + bw / 2, y + 172); }
+                    c.textAlign = 'left';
                 });
-                y += 196 + 24 + gap;
+                y += bh + 24 + gap;
 
                 // Desempeño
                 const hD = 80 + desemp.length * 92;
@@ -1403,9 +1478,10 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 if (notas.length) {
                     y += 24 + gap;
                     font(500, 29);
+                    const maxL = notas.length > 6 ? 2 : 3;   // con muchos comentarios, cada uno se acorta un poco
                     const bloques = notas.map(r => {
                         let ls = textoLineas(c, r.nota.trim(), W - 2 * M - 68);
-                        if (ls.length > 3) { ls = ls.slice(0, 3); ls[2] = ls[2].replace(/\s*\S*$/, '') + '…'; }
+                        if (ls.length > maxL) { ls = ls.slice(0, maxL); ls[maxL - 1] = ls[maxL - 1].replace(/\s*\S*$/, '') + '…'; }
                         return { fecha: fFecha(r.fecha), ls };
                     });
                     const hC = 80 + bloques.reduce((t, b) => t + 36 + b.ls.length * 38 + 18, 0);
@@ -1426,18 +1502,19 @@ En el concepto escriba el nombre del alumno, por favor.`;
                 return y + 70;   // altura usada (incluye el pie)
             }
 
-            // Prueba de mayor a menor tamaño (k) hasta que todo quepa en 3:4
+            // Prueba de mayor a menor tamaño (k) hasta que todo quepa en 3:4; si hay muchos comentarios, la imagen se hace más alta
             const borrador = document.createElement('canvas').getContext('2d');
-            let k = 1, W = ANCHO, H = ALTO, usado = 0;
-            for (k = 1.3; k >= 0.8; k = Math.round((k - 0.05) * 100) / 100) {
-                W = ANCHO / k; H = ALTO / k;
-                borrador.canvas.width = Math.ceil(W); borrador.canvas.height = 2600;
-                usado = pintar(borrador, W, 2600, 0);
+            let k = 1, W = ANCHO, H = ALTO, usado = 0, altoFinal = ALTO;
+            for (let kk = 1.3; kk >= 0.85; kk = Math.round((kk - 0.05) * 100) / 100) {
+                k = kk; W = ANCHO / k; H = ALTO / k;
+                borrador.canvas.width = Math.ceil(W); borrador.canvas.height = 4000;
+                usado = pintar(borrador, W, 4000, 0);
                 if (usado <= H) break;
             }
+            if (usado > H) { altoFinal = Math.min(ALTO_MAX, Math.ceil(usado * k)); H = altoFinal / k; }
             const gap = Math.max(0, Math.min(70, (H - usado) / (notas.length ? 5 : 4)));   // reparte el espacio sobrante
 
-            const out = document.createElement('canvas'); out.width = ANCHO; out.height = ALTO;
+            const out = document.createElement('canvas'); out.width = ANCHO; out.height = altoFinal;
             const c = out.getContext('2d');
             c.scale(k, k);
             pintar(c, W, H, gap);
@@ -1459,20 +1536,33 @@ En el concepto escriba el nombre del alumno, por favor.`;
             return d.length >= 10 ? d : '';
         }
 
-        let IMG = null;
-        async function abrirCompartir(id) {
+        let IMG = null, REP_MES = '';
+        async function abrirCompartir(id, mes) {
             const a = alumno(id); if (!a) return;
-            $('modalIn').innerHTML = '<div class="vacio">⏳ Preparando resumen…</div>';
+            // Mes del reporte: el actual; si todavía no tiene clases, el último mes con clases
+            if (!mes) {
+                const meses = DATA.registros.filter(r => r.id === id).map(r => r.fecha.slice(0, 7));
+                mes = meses.includes(hoy().slice(0, 7)) || !meses.length ? hoy().slice(0, 7) : meses.sort().pop();
+            }
+            REP_MES = mes;
+            $('modalIn').innerHTML = '<div class="vacio">⏳ Preparando reporte…</div>';
             $('modal').classList.add('show');
-            IMG = await generarImagen(a);
-            IMG.archivo = new File([IMG.blob], `Resumen ${a.alumno}.png`, { type: 'image/png' });
-            IMG.alumno = a;
+            IMG = await generarImagen(a, mes);
+            const nomMes = cap(MESES[Number(mes.slice(5, 7)) - 1]);
+            IMG.archivo = new File([IMG.blob], `Reporte ${nomMes} ${a.alumno}.png`, { type: 'image/png' });
+            IMG.alumno = a; IMG.mes = mes;
             const num = waNumero(a.telefono);
             const puedeCompartir = !!(navigator.canShare && navigator.canShare({ files: [IMG.archivo] }));
             const padre = a.padre ? a.padre.split(' ')[0] : 'papá/mamá';
+            const sig = mesMas(mes, 1) <= hoy().slice(0, 7);
             $('modalIn').innerHTML = `
-                <h2>Resumen para ${esc(padre)}</h2>
-                <img class="preview" src="${IMG.url}" alt="Resumen">
+                <h2>Reporte para ${esc(padre)}</h2>
+                <div class="cal-nav" style="justify-content:center;margin:-4px 0 10px">
+                    <button class="flecha" onclick="abrirCompartir('${esc(a.id)}', mesMas(REP_MES, -1))" title="Mes anterior">‹</button>
+                    <b>${nomMes} ${mes.slice(0, 4)}</b>
+                    <button class="flecha" ${sig ? '' : 'disabled style="opacity:.3"'} onclick="abrirCompartir('${esc(a.id)}', mesMas(REP_MES, 1))" title="Mes siguiente">›</button>
+                </div>
+                <img class="preview" src="${IMG.url}" alt="Reporte">
                 ${num ? `
                     <button class="btn-main btn-wa" onclick="enviarWhatsApp()">💬 Abrir chat de ${esc(padre)}</button>
                     <p class="ayuda" style="margin:8px 0 4px">La imagen se copia sola. En el chat, <b>mantén presionado el cuadro de texto → Pegar</b>.</p>`
@@ -1487,7 +1577,7 @@ En el concepto escriba el nombre del alumno, por favor.`;
         function enviarWhatsApp() {
             const a = IMG.alumno, num = waNumero(a.telefono);
             const saludo = a.padre ? `Hola ${a.padre.split(' ')[0]}` : 'Hola';
-            const txt = `${saludo}, le comparto el resumen de avance de ${a.alumno.split(' ')[0]} en ${ESCUELA} 😊`;
+            const txt = `${saludo}, le comparto el reporte de ${MESES[Number(IMG.mes.slice(5, 7)) - 1]} de ${a.alumno.split(' ')[0]} en ${ESCUELA} 😊`;
             let copiado = false;
             try {
                 if (navigator.clipboard && window.ClipboardItem) {
